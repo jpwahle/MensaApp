@@ -1,0 +1,367 @@
+package com.lkaesberg.mensaapp.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.History
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lkaesberg.mensaapp.MealDate
+import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.data.PriceResolver
+import com.lkaesberg.mensaapp.data.UserRole
+import com.lkaesberg.mensaapp.ui.MensaTheme
+import com.lkaesberg.mensaapp.ui.MonoNumericStyle
+import com.lkaesberg.mensaapp.ui.components.AllergenChips
+import com.lkaesberg.mensaapp.ui.components.DietPip
+import com.lkaesberg.mensaapp.ui.components.PlateFill
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+
+@Composable
+fun MealDetailScreen(
+    state: MealsAppState,
+    dateId: String,
+    onBack: () -> Unit,
+) {
+    val palette = MensaTheme.palette
+    val mealsByDate by state.mealsByDate.collectAsState()
+    val favoriteIds by state.favoritesManager.favorites.collectAsState()
+    val history by state.history.collectAsState()
+    val canteenInfo = state.selectedInfo()
+    val userRole by state.userRole.collectAsState()
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(state.selectedCanteen.value?.id) {
+        if (history.isEmpty()) state.loadHistoryForSelected(scope)
+    }
+    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
+
+    val target = remember(mealsByDate, dateId) {
+        mealsByDate.values.flatten().firstOrNull { it.id == dateId }
+    }
+    if (target == null) {
+        Box(modifier = Modifier.fillMaxSize().background(palette.paper), contentAlignment = Alignment.Center) {
+            Text("Gericht nicht gefunden.", color = palette.ink)
+        }
+        return
+    }
+    val enriched = remember(target.id) { MealEnrichment.enrich(target) }
+    val key = enriched.cleanTitle.ifBlank { target.meals?.title ?: target.mealId }
+    val isFav = key in favoriteIds || (target.meals?.title ?: "") in favoriteIds
+    val priceTriple = remember(target.id, state.canteenPrices.value, canteenInfo?.slug) {
+        PriceResolver.resolve(
+            mealCategory = target.category,
+            dbPrices = state.canteenPrices.value,
+            fallbacks = canteenInfo?.fallbackPrices.orEmpty(),
+        )?.let { Triple(it.students, it.employees, it.guests) }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(palette.paper),
+        contentPadding = PaddingValues(bottom = 96.dp),
+    ) {
+        item {
+            Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
+                PlateFill(meal = target.meals, modifier = Modifier.fillMaxSize())
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.25f),
+                                    Color.Transparent,
+                                    palette.paper.copy(alpha = 0.95f)
+                                ),
+                            )
+                        )
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.95f))
+                            .clickable { onBack() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = palette.ink, modifier = Modifier.size(20.dp))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.95f))
+                            .clickable { state.favoritesManager.toggleFavorite(key) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (isFav) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                            null,
+                            tint = if (isFav) palette.amber else palette.ink,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(palette.amber)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "${target.category.uppercase()} · ${if ((target.mealPeriod ?: "lunch").lowercase() == "afternoon") "NACHMITTAG" else "MITTAG"}",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp,
+                    )
+                }
+            }
+        }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = enriched.cleanTitle.ifBlank { target.meals?.title.orEmpty() },
+                    color = palette.ink,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.3).sp,
+                    lineHeight = 28.sp,
+                )
+                val lastServed = remember(history, target.id, enriched.cleanTitle) {
+                    val titleKey = enriched.cleanTitle.ifBlank { target.meals?.title ?: "" }
+                    val legacy = target.meals?.title ?: ""
+                    history.asSequence()
+                        .filter { md ->
+                            md.id != target.id && run {
+                                val k = md.meals?.cleanTitle ?: md.meals?.title ?: ""
+                                k == titleKey || md.meals?.title == legacy
+                            }
+                        }
+                        .mapNotNull { runCatching { LocalDate.parse(it.servedOn) }.getOrNull() }
+                        .filter { it < today }
+                        .maxOrNull()
+                }
+                if (lastServed != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.History,
+                            contentDescription = null,
+                            tint = palette.sub,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Text(
+                            text = "Zuletzt serviert ${relativeAgo(today, lastServed)}",
+                            color = palette.sub,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    target.meals?.icons.orEmpty().forEach { kind ->
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(100.dp))
+                                .background(palette.moss)
+                                .border(1.dp, palette.hair, RoundedCornerShape(100.dp))
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            DietPip(kind = kind, size = 14.dp)
+                            Text(
+                                text = com.lkaesberg.mensaapp.ui.DietColors.longLabel(kind),
+                                color = palette.forestDark,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (enriched.sides.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 22.dp)) {
+                    Text(
+                        text = "BEILAGEN",
+                        color = palette.sub,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    enriched.sides.forEachIndexed { i, s ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(palette.forest))
+                            Text(s, color = palette.ink, fontSize = 14.sp)
+                        }
+                        if (i < enriched.sides.size - 1) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(palette.hair))
+                        }
+                    }
+                }
+            }
+        }
+        if (priceTriple != null) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.surface)
+                        .border(1.dp, palette.hair, RoundedCornerShape(14.dp))
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "PREIS",
+                        color = palette.sub,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                        PriceCell(UserRole.Studierend.shortLabel, priceTriple.first, userRole == UserRole.Studierend, palette)
+                        Box(modifier = Modifier.width(1.dp).height(48.dp).background(palette.hair))
+                        PriceCell(UserRole.Bedienstet.shortLabel, priceTriple.second, userRole == UserRole.Bedienstet, palette)
+                        Box(modifier = Modifier.width(1.dp).height(48.dp).background(palette.hair))
+                        PriceCell(UserRole.Gast.shortLabel, priceTriple.third, userRole == UserRole.Gast, palette)
+                    }
+                }
+            }
+        }
+        if (enriched.allergens.isNotEmpty() || enriched.additives.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(
+                        text = "ALLERGENE & ZUSATZSTOFFE",
+                        color = palette.sub,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AllergenChips(allergens = enriched.allergens, additives = enriched.additives)
+                }
+            }
+        }
+        if (isFav) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.amberLight)
+                        .border(1.dp, Color(0xFFEAD7A8), RoundedCornerShape(12.dp))
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(palette.amber),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Notifications, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                    Column {
+                        Text(
+                            "Wir erinnern dich",
+                            color = palette.amberDark,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Du bekommst eine Push-Benachrichtigung, sobald dein Lieblings­gericht wieder auf dem Plan steht.",
+                            color = palette.amberDark.copy(alpha = 0.9f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriceCell(label: String, value: String, highlight: Boolean, palette: com.lkaesberg.mensaapp.ui.MensaPalette) {
+    Column(
+        modifier = Modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(label, color = palette.sub, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "$value €",
+            color = if (highlight) palette.forestDark else palette.sub,
+            fontSize = if (highlight) 22.sp else 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            style = MonoNumericStyle,
+        )
+    }
+}
+

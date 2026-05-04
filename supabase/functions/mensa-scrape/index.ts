@@ -133,10 +133,16 @@ function parseGermanDate(s: string): Date | null {
   return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`);
 }
 
-// Strip and collect EU allergen / Mensa additive codes from text. Conservative:
-// only matches "(…)" groups whose contents look entirely like codes, so
-// arbitrary parenthetical asides ("(Mittagsangebot)", "(z.B. mit Fisch)")
-// are left intact.
+// Strip and collect EU allergen / Mensa additive codes from text.
+// A "(…)" group is treated as a code list (and removed) when it has at
+// least one valid code AND no comma-separated part contains internal
+// whitespace. This catches the common "(a.1, c, g)" form as well as
+// mixed groups like "(Fleisch, a, a.1, c, g, i, 3)" where the upstream
+// HTML stuffs a diet label in alongside the codes — the codes are
+// collected, the unmatched label is dropped (diet info is also conveyed
+// by the .sp_hin icons). Free-text asides like "(z.B. mit Fisch)" are
+// left intact (whitespace check), as are single-word labels like
+// "(Mittagsangebot)" (no valid codes).
 const CODE_RE = /^([0-9]{1,2}|[a-n](?:\.[0-9]{1,2})?)$/;
 function extractCodes(text: string): {
   stripped: string;
@@ -147,8 +153,11 @@ function extractCodes(text: string): {
   const additives = new Set<string>();
   const stripped = text.replace(/\s*\(([^)]+)\)/g, (full, body: string) => {
     const parts = body.split(',').map((p) => p.trim()).filter(Boolean);
-    if (parts.length === 0 || !parts.every((p) => CODE_RE.test(p))) return full;
-    for (const p of parts) {
+    if (parts.length === 0) return full;
+    if (parts.some((p) => /\s/.test(p))) return full;
+    const codes = parts.filter((p) => CODE_RE.test(p));
+    if (codes.length === 0) return full;
+    for (const p of codes) {
       if (/^[0-9]/.test(p)) additives.add(p);
       else allergens.add(p);
     }

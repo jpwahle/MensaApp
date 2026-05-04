@@ -1,11 +1,58 @@
 package com.lkaesberg.mensaapp
 
+import com.lkaesberg.mensaapp.data.MealEnrichment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ComposeAppCommonTest {
+
+    @Test
+    fun mealEnrichment_usesCleanTitleWhenPresent() {
+        val meal = Meal(
+            id = "1",
+            title = "Spätzlepfanne (a.1, c, g)",
+            fullText = "Spätzlepfanne (a.1, c, g) mit Röstzwiebeln und Salat",
+            cleanTitle = "Spätzlepfanne",
+            sides = listOf("Röstzwiebeln", "Salat"),
+        )
+        val enriched = MealEnrichment.enrich(meal)
+        assertEquals("Spätzlepfanne", enriched.cleanTitle)
+        assertEquals(listOf("Röstzwiebeln", "Salat"), enriched.sides)
+    }
+
+    @Test
+    fun mealEnrichment_stripsAllergenCodesWhenCleanTitleMissing() {
+        val meal = Meal(
+            id = "1",
+            title = "Hähnchenbrust (a.1, g) mit Pommes",
+            fullText = "Hähnchenbrust (a.1, g) mit Pommes und Salat (c)",
+        )
+        val enriched = MealEnrichment.enrich(meal)
+        assertFalse(enriched.cleanTitle.contains("(a.1"))
+        assertTrue(enriched.cleanTitle.contains("Hähnchenbrust"))
+    }
+
+    @Test
+    fun mealEnrichment_dropsAllergenFragmentsLeakedIntoSides() {
+        val meal = Meal(
+            id = "1",
+            title = "Gebratenes Strohschweinschnitzel",
+            fullText = "Gebratenes Strohschweinschnitzel Champignonrahmsauce, Zitronenecke, Kräuterkartoffeln, Leipziger Allerlei (Fleisch, a, a.1, c, g, i, 3)",
+            cleanTitle = "Gebratenes Strohschweinschnitzel",
+            sides = listOf(
+                "Champignonrahmsauce", "Zitronenecke", "Kräuterkartoffeln",
+                "Leipziger Allerlei", "(Fleisch", "a", "a.1", "c", "g", "i", "3)",
+            ),
+        )
+        val enriched = MealEnrichment.enrich(meal)
+        assertEquals(
+            listOf("Champignonrahmsauce", "Zitronenecke", "Kräuterkartoffeln", "Leipziger Allerlei"),
+            enriched.sides,
+        )
+    }
+
 
     @Test
     fun example() {

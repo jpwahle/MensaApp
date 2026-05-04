@@ -3,9 +3,12 @@
 
     <!-- Needed for Supabase / Ktor HTTP requests -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Favorite-on-the-plan reminders. Requested at runtime on Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
             android:allowBackup="true"
+            android:enableOnBackInvokedCallback="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher_round"

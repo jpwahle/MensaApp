@@ -10,10 +10,13 @@ androidx-core = "1.16.0"
 androidx-espresso = "3.6.1"
 androidx-lifecycle = "2.9.1"
 androidx-testExt = "1.2.1"
+androidx-work = "2.9.1"
+androidx-navigation-compose = "2.8.0-alpha10"
 composeMultiplatform = "1.8.2"
 junit = "4.13.2"
 kamelImage = "1.0.6"
 kotlin = "2.2.0"
+kotlinxCoroutines = "1.9.0"
 kotlinxDatetime = "0.6.2"
 kotlinxSerializationJson = "1.8.1"
 ktor = "3.2.0"
@@ -39,6 +42,9 @@ ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 postgrest-kt = { module = "io.github.jan-tennert.supabase:postgrest-kt" }
 supabase-postgrest-kt = { module = "io.github.jan-tennert.supabase:postgrest-kt" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
+androidx-navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "androidx-navigation-compose" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 
 
 [plugins]

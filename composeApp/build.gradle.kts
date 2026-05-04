@@ -57,6 +57,8 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             // Ktor engine for Android
             implementation(libs.ktor.client.okhttp)
+            // Background scheduling for favorite-on-plan reminders
+            implementation(libs.androidx.work.runtime.ktx)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -77,6 +79,10 @@ kotlin {
             // Date/Time
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)
+            // Coroutines
+            implementation(libs.kotlinx.coroutines.core)
+            // Compose Navigation (KMP)
+            implementation(libs.androidx.navigation.compose)
             // Image loading (Kamel)
             implementation(libs.kamel.image)
             // Multiplatform Settings for persistence

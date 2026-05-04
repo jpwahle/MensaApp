@@ -1,79 +1,129 @@
 package com.lkaesberg.mensaapp.ui
 
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF006876),
+private fun lightSchemeFor(p: MensaPalette) = lightColorScheme(
+    primary = p.forest,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFA4EDFF),
-    onPrimaryContainer = Color(0xFF001F24),
-    secondary = Color(0xFF4A6267),
+    primaryContainer = p.moss,
+    onPrimaryContainer = p.forestDark,
+    secondary = p.amber,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFCCE8EC),
-    onSecondaryContainer = Color(0xFF051F23),
-    tertiary = Color(0xFF525E7D),
+    secondaryContainer = p.amberLight,
+    onSecondaryContainer = p.amberDark,
+    tertiary = p.forestDeep,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFDAE2FF),
-    onTertiaryContainer = Color(0xFF0E1B37),
-    error = Color(0xFFBA1A1A),
+    tertiaryContainer = p.mossLight,
+    onTertiaryContainer = p.forestDark,
+    error = p.closed,
     onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF5FAFB),
-    onBackground = Color(0xFF191C1D),
-    surface = Color(0xFFF5FAFB),
-    onSurface = Color(0xFF191C1D),
-    surfaceVariant = Color(0xFFDBE4E7),
-    onSurfaceVariant = Color(0xFF3F484B),
-    outline = Color(0xFF6F797C),
-    outlineVariant = Color(0xFFBFC8CB),
-    scrim = Color(0xFF000000),
-    inverseSurface = Color(0xFF2D3132),
-    inverseOnSurface = Color(0xFFEFF1F2),
-    inversePrimary = Color(0xFF53D7F0),
-    surfaceTint = Color(0xFF006876),
-    surfaceContainerHighest = Color(0xFFDEE3E5),
-    surfaceContainer = Color(0xFFE9EDEF),
-    surfaceContainerLow = Color(0xFFEFF4F5),
-    surfaceContainerLowest = Color.White
+    errorContainer = Color(0xFFF7D9D2),
+    onErrorContainer = Color(0xFF5C1A14),
+    background = p.paper,
+    onBackground = p.ink,
+    surface = p.surface,
+    onSurface = p.ink,
+    surfaceVariant = p.mossLight,
+    onSurfaceVariant = p.sub,
+    outline = p.sub,
+    outlineVariant = p.hair,
+    scrim = Color(0x99000000),
+    inverseSurface = p.forestDark,
+    inverseOnSurface = p.paper,
+    inversePrimary = Color(0xFF8DC9A8),
+    surfaceTint = p.forest,
+    surfaceContainerHighest = Color(0xFFEFEFE6),
+    surfaceContainer = Color(0xFFF3F2EA),
+    surfaceContainerHigh = Color(0xFFE9E9E0),
+    surfaceContainerLow = Color(0xFFF6F5ED),
+    surfaceContainerLowest = Color.White,
+    surfaceBright = p.surface,
+    surfaceDim = Color(0xFFE6E5DC),
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFF4DD0E8),
-    onPrimary = Color(0xFF00363E),
-    primaryContainer = Color(0xFF004F59),
-    onPrimaryContainer = Color(0xFFA4EDFF),
-    secondary = Color(0xFFB0CCD1),
-    onSecondary = Color(0xFF1B3438),
-    secondaryContainer = Color(0xFF324B4F),
-    onSecondaryContainer = Color(0xFFCCE8EC),
-    tertiary = Color(0xFFB8C6EA),
-    onTertiary = Color(0xFF23304E),
-    tertiaryContainer = Color(0xFF3A4765),
-    onTertiaryContainer = Color(0xFFDAE2FF),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF0F1416),
-    onBackground = Color(0xFFDEE3E5),
-    surface = Color(0xFF0F1416),
-    onSurface = Color(0xFFDEE3E5),
-    surfaceVariant = Color(0xFF3F484B),
-    onSurfaceVariant = Color(0xFFBFC8CB),
-    outline = Color(0xFF899295),
-    outlineVariant = Color(0xFF3F484B),
-    scrim = Color(0xFF000000),
-    inverseSurface = Color(0xFFDEE3E5),
-    inverseOnSurface = Color(0xFF2D3132),
-    inversePrimary = Color(0xFF006876),
-    surfaceTint = Color(0xFF4DD0E8),
-    surfaceContainerHighest = Color(0xFF32373A),
-    surfaceContainer = Color(0xFF1D2022),
-    surfaceContainerLow = Color(0xFF181C1E),
-    surfaceContainerLowest = Color(0xFF0A0F10)
+private fun darkSchemeFor(p: MensaPalette) = darkColorScheme(
+    primary = p.forest,
+    onPrimary = Color(0xFF11201A),
+    primaryContainer = p.moss,
+    onPrimaryContainer = p.forestDark,
+    secondary = p.amber,
+    onSecondary = Color(0xFF2E1F08),
+    secondaryContainer = p.amberLight,
+    onSecondaryContainer = p.amberDark,
+    tertiary = p.forestDeep,
+    onTertiary = Color(0xFF11201A),
+    tertiaryContainer = p.mossLight,
+    onTertiaryContainer = p.forestDark,
+    error = p.closed,
+    onError = Color(0xFF3A0F0A),
+    errorContainer = Color(0xFF552620),
+    onErrorContainer = Color(0xFFF7D9D2),
+    background = p.paper,
+    onBackground = p.ink,
+    surface = p.surface,
+    onSurface = p.ink,
+    surfaceVariant = p.mossLight,
+    onSurfaceVariant = p.sub,
+    outline = p.sub,
+    outlineVariant = p.hair,
+    scrim = Color(0xCC000000),
+    inverseSurface = p.ink,
+    inverseOnSurface = p.paper,
+    inversePrimary = Color(0xFF2F5D4A),
+    surfaceTint = p.forest,
+    surfaceContainerHighest = Color(0xFF26302A),
+    surfaceContainer = Color(0xFF1F2620),
+    surfaceContainerHigh = Color(0xFF222A24),
+    surfaceContainerLow = Color(0xFF181D17),
+    surfaceContainerLowest = Color(0xFF0E120D),
+    surfaceBright = Color(0xFF252B22),
+    surfaceDim = p.paper,
+)
+
+private val mensaTypography = Typography().run {
+    val display = FontFamily.Default
+    val body = FontFamily.Default
+    copy(
+        displayLarge = displayLarge.copy(fontFamily = display, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.02).sp),
+        displayMedium = displayMedium.copy(fontFamily = display, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.02).sp),
+        displaySmall = displaySmall.copy(fontFamily = display, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.02).sp),
+        headlineLarge = headlineLarge.copy(fontFamily = display, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.02).sp),
+        headlineMedium = headlineMedium.copy(fontFamily = display, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).sp),
+        headlineSmall = headlineSmall.copy(fontFamily = display, fontWeight = FontWeight.Bold, letterSpacing = (-0.01).sp),
+        titleLarge = titleLarge.copy(fontFamily = body, fontWeight = FontWeight.Bold),
+        titleMedium = titleMedium.copy(fontFamily = body, fontWeight = FontWeight.Bold),
+        titleSmall = titleSmall.copy(fontFamily = body, fontWeight = FontWeight.SemiBold),
+        bodyLarge = bodyLarge.copy(fontFamily = body),
+        bodyMedium = bodyMedium.copy(fontFamily = body),
+        bodySmall = bodySmall.copy(fontFamily = body),
+        labelLarge = labelLarge.copy(fontFamily = body, fontWeight = FontWeight.SemiBold),
+        labelMedium = labelMedium.copy(fontFamily = body, fontWeight = FontWeight.SemiBold),
+        labelSmall = labelSmall.copy(fontFamily = body, fontWeight = FontWeight.Bold, letterSpacing = 0.08.sp),
+    )
+}
+
+/** Mono style used for prices, frequencies, and other numerics. */
+val MonoNumericStyle: TextStyle = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontWeight = FontWeight.Bold,
+)
+
+/** Small-caps eyebrow style — uppercased category labels with letter-spacing. */
+val EyebrowStyle: TextStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontSize = 10.sp,
+    fontWeight = FontWeight.Bold,
+    letterSpacing = 0.6.sp,
 )
 
 @Composable
@@ -81,11 +131,14 @@ fun MensaAppTheme(
     useDarkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colors = if (useDarkTheme) DarkColors else LightColors
+    val palette = if (useDarkTheme) DarkMensaPalette else LightMensaPalette
+    val colors = if (useDarkTheme) darkSchemeFor(palette) else lightSchemeFor(palette)
 
-    MaterialTheme(
-        colorScheme = colors,
-        typography = Typography(),
-        content = content
-    )
-} 
+    CompositionLocalProvider(LocalMensaPalette provides palette) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = mensaTypography,
+            content = content
+        )
+    }
+}

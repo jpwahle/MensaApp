@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(~/Library/Android/sdk/platform-tools/adb shell *)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb pull *)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb logcat *)",
+      "Bash(./gradlew :composeApp:assembleDebug)",
+      "Bash(~/Library/Android/sdk/platform-tools/adb install *)",
+      "Bash(./gradlew :composeApp:testDebugUnitTest)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinWasmJs)"
+    ]
+  }
+}
