@@ -4,8 +4,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Agriculture
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.EnergySavingsLeaf
+import androidx.compose.material.icons.filled.Euro
 import androidx.compose.material.icons.filled.LunchDining
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SetMeal
 import androidx.compose.material.icons.filled.Spa
@@ -159,7 +159,9 @@ object DietIcons {
         "bio" -> Icons.Filled.EnergySavingsLeaf
         "regional" -> Icons.Filled.Storefront
         "klimaessen" -> Icons.Filled.Public
-        "nds" -> Icons.Filled.Place
+        // Niedersachsen-Menü is state-subsidised — euro sign captures the angle
+        // better than a generic location pin.
+        "nds" -> Icons.Filled.Euro
         else -> null
     }
 }

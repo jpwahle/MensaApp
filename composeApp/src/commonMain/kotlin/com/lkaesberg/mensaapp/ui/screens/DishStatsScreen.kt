@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.MonoNumericStyle
@@ -163,7 +164,7 @@ fun DishStatsScreen(
                         rank = i + 1,
                         dish = d,
                         barFraction = barFraction,
-                        isFavorite = d.title in favoriteIds || (d.md.meals?.title ?: "") in favoriteIds,
+                        isFavorite = favoriteIds.containsFavorite(d.title) || favoriteIds.containsFavorite(d.md.meals?.title ?: ""),
                         today = today,
                         palette = palette,
                     )

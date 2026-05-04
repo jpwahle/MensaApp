@@ -171,7 +171,11 @@ fun App(
                 )
             }
             composable(Route.Search) {
-                SearchScreen(state = state, onBack = { navController.popBackStackSafely() })
+                SearchScreen(
+                    state = state,
+                    onBack = { navController.popBackStackSafely() },
+                    onOpenMealDetail = { md -> navController.navigateSafely(Route.mealDetail(md.id)) },
+                )
             }
             composable(Route.Archive) {
                 AllMealsArchiveScreen(state = state, onBack = { navController.popBackStackSafely() })

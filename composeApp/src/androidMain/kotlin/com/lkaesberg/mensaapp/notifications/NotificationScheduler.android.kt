@@ -22,6 +22,7 @@ import androidx.work.workDataOf
 import com.lkaesberg.mensaapp.FavoritesManager
 import com.lkaesberg.mensaapp.MealsRepository
 import com.lkaesberg.mensaapp.SupabaseProvider
+import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.CanteenStaticData
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.russhwolf.settings.Settings
@@ -212,7 +213,7 @@ class FavoriteCheckWorker(appContext: Context, params: WorkerParameters) :
                     mealsByDate[d].orEmpty().forEach { md ->
                         val title = md.meals?.cleanTitle ?: md.meals?.title ?: ""
                         val titleLegacy = md.meals?.title ?: ""
-                        if (favorites.contains(title) || favorites.contains(titleLegacy)) {
+                        if (favorites.containsFavorite(title) || favorites.containsFavorite(titleLegacy)) {
                             matches.add(Match(canteen, d, md))
                         }
                     }

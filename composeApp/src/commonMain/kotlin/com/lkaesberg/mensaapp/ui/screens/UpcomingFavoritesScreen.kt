@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.Canteen
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
@@ -275,5 +276,5 @@ private fun UpcomingFavoriteRow(
 private fun MealDate.matchesAnyFavorite(favorites: Set<String>): Boolean {
     val cleanTitle = meals?.cleanTitle ?: meals?.title ?: ""
     val legacyTitle = meals?.title ?: ""
-    return cleanTitle in favorites || legacyTitle in favorites
+    return favorites.containsFavorite(cleanTitle) || favorites.containsFavorite(legacyTitle)
 }

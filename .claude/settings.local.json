@@ -7,7 +7,8 @@
       "Bash(./gradlew :composeApp:assembleDebug)",
       "Bash(~/Library/Android/sdk/platform-tools/adb install *)",
       "Bash(./gradlew :composeApp:testDebugUnitTest)",
-      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinWasmJs)"
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinWasmJs)",
+      "Bash(./gradlew :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinWasmJs :composeApp:testDebugUnitTest)"
     ]
   }
 }

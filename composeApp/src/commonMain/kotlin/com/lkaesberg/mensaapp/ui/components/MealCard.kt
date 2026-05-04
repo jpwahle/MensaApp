@@ -53,9 +53,11 @@ fun MealCard(
     priceText: String? = null,
     favoriteHint: String? = null,
     enriched: EnrichedMeal = MealEnrichment.enrich(mealDate),
+    /** Force the card into the deactivated visual state (e.g. canteen past closing). */
+    forceDeactivated: Boolean = false,
 ) {
     val palette = MensaTheme.palette
-    val isDeactivated = mealDate.deactivatedAt != null
+    val isDeactivated = mealDate.deactivatedAt != null || forceDeactivated
     Row(
         modifier = modifier
             .fillMaxWidth()

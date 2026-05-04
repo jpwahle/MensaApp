@@ -186,6 +186,18 @@ object CanteenStaticData {
         return now.time >= open && now.time < close
     }
 
+    /**
+     * `true` once the canteen is past its closing time for the given day —
+     * also `true` on days the canteen has no service slot at all (e.g. Sunday).
+     * Used by the feed to show today's meals as deactivated and default the
+     * date strip to tomorrow.
+     */
+    fun pastClosingTime(info: CanteenInfo, now: LocalDateTime = currentDateTime()): Boolean {
+        val today = info.hours.firstOrNull { now.date.dayOfWeek in it.days } ?: return true
+        val close = today.closeTime ?: return true
+        return now.time >= close
+    }
+
     fun closesAt(info: CanteenInfo, now: LocalDateTime = currentDateTime()): String? {
         val today = info.hours.firstOrNull { now.date.dayOfWeek in it.days } ?: return null
         val close = today.closeTime ?: return null

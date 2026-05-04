@@ -19,8 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
@@ -28,7 +32,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.filled.History
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.lkaesberg.mensaapp.data.PriceResolver
 import com.lkaesberg.mensaapp.data.UserRole
@@ -54,6 +58,14 @@ import com.lkaesberg.mensaapp.ui.MonoNumericStyle
 import com.lkaesberg.mensaapp.ui.components.AllergenChips
 import com.lkaesberg.mensaapp.ui.components.DietPip
 import com.lkaesberg.mensaapp.ui.components.PlateFill
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -88,7 +100,7 @@ fun MealDetailScreen(
     }
     val enriched = remember(target.id) { MealEnrichment.enrich(target) }
     val key = enriched.cleanTitle.ifBlank { target.meals?.title ?: target.mealId }
-    val isFav = key in favoriteIds || (target.meals?.title ?: "") in favoriteIds
+    val isFav = favoriteIds.containsFavorite(key) || favoriteIds.containsFavorite(target.meals?.title ?: "")
     val priceTriple = remember(target.id, state.canteenPrices.value, canteenInfo?.slug) {
         PriceResolver.resolve(
             mealCategory = target.category,
@@ -97,16 +109,66 @@ fun MealDetailScreen(
         )?.let { Triple(it.students, it.employees, it.guests) }
     }
 
+    val baseHeroHeight = 320.dp
+    val maxStretchDp = 280.dp
+    val maxStretchPx = with(LocalDensity.current) { maxStretchDp.toPx() }
+    val stretch = remember { Animatable(0f) }
+    val stretchScope = rememberCoroutineScope()
+    val nestedScrollConnection = remember(maxStretchPx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // While stretched, an upward swipe (negative y) collapses the
+                // hero before the list begins to scroll.
+                if (source == NestedScrollSource.Drag && stretch.value > 0f && available.y < 0f) {
+                    val consume = minOf(-available.y, stretch.value)
+                    stretchScope.launch { stretch.snapTo(stretch.value - consume) }
+                    return Offset(0f, -consume)
+                }
+                return Offset.Zero
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                // At the top edge, a pull-down (positive y leftover) grows the hero.
+                if (source == NestedScrollSource.Drag && available.y > 0f) {
+                    val canGrow = (maxStretchPx - stretch.value).coerceAtLeast(0f)
+                    val grow = minOf(available.y, canGrow)
+                    if (grow > 0f) {
+                        stretchScope.launch { stretch.snapTo(stretch.value + grow) }
+                        return Offset(0f, grow)
+                    }
+                }
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (stretch.value > 0f) {
+                    stretch.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+    val stretchFraction = (stretch.value / maxStretchPx).coerceIn(0f, 1f)
+    val gradientAlpha = 1f - stretchFraction
+
+    Box(modifier = Modifier.fillMaxSize().nestedScroll(nestedScrollConnection)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(palette.paper),
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item {
-            Box(modifier = Modifier.fillMaxWidth().height(240.dp)) {
+            val stretchDp = with(LocalDensity.current) { stretch.value.toDp() }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(baseHeroHeight + stretchDp),
+            ) {
                 PlateFill(meal = target.meals, modifier = Modifier.fillMaxSize())
+                // Gradient overlay fades out as the user pulls down so the
+                // image can be seen unobstructed.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .alpha(gradientAlpha)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
@@ -345,6 +407,8 @@ fun MealDetailScreen(
             }
         }
     }
+
+    } // wrapper Box
 }
 
 @Composable

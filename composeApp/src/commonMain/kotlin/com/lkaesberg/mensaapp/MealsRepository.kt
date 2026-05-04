@@ -34,7 +34,12 @@ class MealsRepository(private val postgrest: Postgrest) {
             order("served_on", Order.ASCENDING)
         }.decodeList<MealDate>()
 
-        raw.filter { it.deactivatedAt == null }
+        // Keep deactivated rows from *today*: the upstream HTML drops today's
+        // plan once the canteen closes, which makes the scraper soft-delete
+        // those rows. They should still appear in the feed (greyed out via
+        // MealCard's deactivatedAt handling) instead of vanishing. Past and
+        // future deactivations stay filtered.
+        raw.filter { it.deactivatedAt == null || LocalDate.parse(it.servedOn) == today }
             .groupBy { LocalDate.parse(it.servedOn) }
             .mapValues { entry ->
                 entry.value.sortedBy { it.category.lowercase() }

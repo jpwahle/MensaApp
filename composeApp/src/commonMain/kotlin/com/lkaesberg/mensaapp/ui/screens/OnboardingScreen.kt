@@ -286,12 +286,17 @@ private fun HeroPlateCard(meal: Meal?, rotation: Float, fallbackDietKind: String
 private fun pickHeroMeals(
     upcomingMap: Map<Pair<com.lkaesberg.mensaapp.Canteen, kotlinx.datetime.LocalDate>, List<com.lkaesberg.mensaapp.MealDate>>,
 ): List<Meal> {
-    val pool = upcomingMap.values.asSequence()
+    val all = upcomingMap.values.asSequence()
         .flatten()
         .mapNotNull { it.meals }
-        .filter { !it.imagePath.isNullOrBlank() }
         .distinctBy { it.id }
         .toList()
+    // Prefer real photos (imagePath), but fall back to the generic per-category
+    // image so the welcome hero almost always has actual food on it instead of
+    // the tinted placeholder box.
+    val realPhotos = all.filter { !it.imagePath.isNullOrBlank() }
+    val pool = if (realPhotos.size >= 2) realPhotos
+        else all.filter { !it.imagePath.isNullOrBlank() || !it.imagePathGeneric.isNullOrBlank() }
     if (pool.size < 2) return pool
     val rng = Random.Default
     val first = pool.random(rng)

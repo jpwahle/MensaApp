@@ -3,6 +3,8 @@ package com.lkaesberg.mensaapp.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,10 +32,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.mealMatchesDietaryFilters
 import com.lkaesberg.mensaapp.separateMealsByPeriod
 import com.lkaesberg.mensaapp.shouldHideAfternoonMealsForCanteenOnDate
@@ -93,10 +98,32 @@ fun FeedScreen(
         val monday = today.minus(mondayOffset, DateTimeUnit.DAY)
         (0 until 5).map { monday.plus(it, DateTimeUnit.DAY) }
     }
-    var selectedDate by remember { mutableStateOf(weekDates.firstOrNull { it >= today } ?: today) }
+    // The visible day is whatever page the pager is on. rememberPagerState
+    // already saves its current page across navigation back from MealDetail.
+    val initialPage = remember(weekDates, today) {
+        weekDates.indexOf(weekDates.firstOrNull { it >= today } ?: today).coerceAtLeast(0)
+    }
+    val pagerState = rememberPagerState(initialPage = initialPage) { weekDates.size }
+    val selectedDate = weekDates.getOrElse(pagerState.currentPage) { today }
 
     val canteenInfo = remember(selectedCanteen) {
         selectedCanteen?.name?.let { CanteenStaticData.matchFor(it) }
+    }
+    val isCanteenPastClosing = canteenInfo?.let { CanteenStaticData.pastClosingTime(it) } ?: false
+
+    // Once per session per canteen: if the canteen is already closed for today,
+    // jump to tomorrow so the default view is the upcoming day. The user can
+    // still swipe / tap back to today.
+    var autoBumpedForCanteen by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(selectedCanteen?.id, isCanteenPastClosing) {
+        val canteenId = selectedCanteen?.id ?: return@LaunchedEffect
+        if (autoBumpedForCanteen == canteenId) return@LaunchedEffect
+        autoBumpedForCanteen = canteenId
+        if (isCanteenPastClosing && pagerState.currentPage == weekDates.indexOf(today)) {
+            val tomorrow = today.plus(1, DateTimeUnit.DAY)
+            val targetIdx = weekDates.indexOfFirst { it >= tomorrow }
+            if (targetIdx >= 0) pagerState.scrollToPage(targetIdx)
+        }
     }
 
     Column(
@@ -123,7 +150,10 @@ fun FeedScreen(
             today = today,
             mealsByDate = mealsByDate,
             favoriteIds = favoriteIds,
-            onSelect = { selectedDate = it },
+            onSelect = { d ->
+                val idx = weekDates.indexOf(d).coerceAtLeast(0)
+                scope.launch { pagerState.animateScrollToPage(idx) }
+            },
         )
         Spacer(Modifier.height(8.dp))
         FilterChipsRow(
@@ -135,41 +165,64 @@ fun FeedScreen(
         )
         Spacer(Modifier.height(4.dp))
 
-        val buckets = remember(mealsByDate, selectedDate, selectedFilters.value, selectedCanteen?.id) {
-            val all = mealsByDate[selectedDate].orEmpty()
-                .filter { mealMatchesDietaryFilters(it, selectedFilters.value) }
-            val hideAfternoon = shouldHideAfternoonMealsForCanteenOnDate(selectedCanteen, all)
-            separateMealsByPeriod(all, hideAfternoon)
-        }
-        val lunchMeals = buckets.lunch
-        val afternoonMeals = buckets.afternoon
-        val activeMeals = remember(buckets) { (lunchMeals + afternoonMeals).distinctBy { it.id } }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { pageIdx ->
+            val pageDate = weekDates[pageIdx]
+            val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id) {
+                val all = mealsByDate[pageDate].orEmpty()
+                    .filter { mealMatchesDietaryFilters(it, selectedFilters.value) }
+                val hideAfternoon = shouldHideAfternoonMealsForCanteenOnDate(selectedCanteen, all)
+                separateMealsByPeriod(all, hideAfternoon)
+            }
+            val lunchMeals = pageBuckets.lunch
+            val afternoonMeals = pageBuckets.afternoon
+            val activeMeals = (lunchMeals + afternoonMeals).distinctBy { it.id }
+            val showAsClosed = pageDate == today && isCanteenPastClosing
 
-        if (activeMeals.isEmpty()) {
-            EmptyState(
-                title = "Heute steht noch nichts auf dem Plan.",
-                subtitle = "Versuche es später noch einmal oder wähle einen anderen Tag.",
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (lunchMeals.isNotEmpty()) {
-                    item(key = "sep-lunch") {
-                        TimeSeparator(label = "MITTAG · 11:30 – 14:30")
-                    }
-                    items(lunchMeals, key = { "lunch-${it.id}" }) { md ->
-                        FeedMealCard(state, md, favoriteIds, userRole, onOpenMealDetail)
-                    }
+            if (activeMeals.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    EmptyState(
+                        title = "Heute steht noch nichts auf dem Plan.",
+                        subtitle = "Versuche es später noch einmal oder wähle einen anderen Tag.",
+                    )
                 }
-                if (afternoonMeals.isNotEmpty()) {
-                    item(key = "sep-afternoon") {
-                        TimeSeparator(label = "NACHMITTAG · 14:30 – 16:30")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (lunchMeals.isNotEmpty()) {
+                        item(key = "sep-lunch") {
+                            TimeSeparator(label = "MITTAG · 11:30 – 14:30")
+                        }
+                        items(lunchMeals, key = { "lunch-${it.id}" }) { md ->
+                            FeedMealCard(
+                                state = state,
+                                md = md,
+                                favoriteIds = favoriteIds,
+                                userRole = userRole,
+                                showAsClosed = showAsClosed,
+                                onOpenMealDetail = onOpenMealDetail,
+                            )
+                        }
                     }
-                    items(afternoonMeals, key = { "afternoon-${it.id}" }) { md ->
-                        FeedMealCard(state, md, favoriteIds, userRole, onOpenMealDetail)
+                    if (afternoonMeals.isNotEmpty()) {
+                        item(key = "sep-afternoon") {
+                            TimeSeparator(label = "NACHMITTAG · 14:30 – 16:30")
+                        }
+                        items(afternoonMeals, key = { "afternoon-${it.id}" }) { md ->
+                            FeedMealCard(
+                                state = state,
+                                md = md,
+                                favoriteIds = favoriteIds,
+                                userRole = userRole,
+                                showAsClosed = showAsClosed,
+                                onOpenMealDetail = onOpenMealDetail,
+                            )
+                        }
                     }
                 }
             }
@@ -183,11 +236,12 @@ private fun FeedMealCard(
     md: MealDate,
     favoriteIds: Set<String>,
     userRole: com.lkaesberg.mensaapp.data.UserRole,
+    showAsClosed: Boolean,
     onOpenMealDetail: (MealDate) -> Unit,
 ) {
     val enriched = remember(md.id) { MealEnrichment.enrich(md) }
     val key = enriched.cleanTitle.ifBlank { md.meals?.title ?: md.mealId }
-    val isFav = key in favoriteIds || (md.meals?.title ?: "") in favoriteIds
+    val isFav = favoriteIds.containsFavorite(key) || favoriteIds.containsFavorite(md.meals?.title ?: "")
     val info = state.selectedInfo()
     val resolved = PriceResolver.resolve(
         mealCategory = md.category,
@@ -206,6 +260,7 @@ private fun FeedMealCard(
         priceText = priceText,
         favoriteHint = null,
         enriched = enriched,
+        forceDeactivated = showAsClosed,
     )
 }
 
@@ -329,7 +384,7 @@ private fun DateStrip(
             val label = labels[(d.dayOfWeek.isoDayNumber - 1).coerceAtLeast(0).coerceAtMost(6)]
             val hasFav = mealsByDate[d].orEmpty().any { md ->
                 val key = MealEnrichment.enrich(md).cleanTitle.ifBlank { md.meals?.title ?: "" }
-                key in favoriteIds || (md.meals?.title ?: "") in favoriteIds
+                favoriteIds.containsFavorite(key) || favoriteIds.containsFavorite(md.meals?.title ?: "")
             }
             DateChip(
                 label = label,
@@ -343,3 +398,4 @@ private fun DateStrip(
         }
     }
 }
+

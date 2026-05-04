@@ -39,6 +39,7 @@ import com.lkaesberg.mensaapp.Canteen
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.normalizeFavoriteKey
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
 import com.lkaesberg.mensaapp.ui.components.Plate
@@ -68,10 +69,13 @@ fun FavoritesScreen(
 
     val favorites = remember(favoriteIds, upcomingMap, history) {
         favoriteIds.map { fav ->
-            val mostRecent = history.firstOrNull { md ->
+            val favNorm = normalizeFavoriteKey(fav)
+            val matches: (MealDate) -> Boolean = { md ->
                 val key = md.meals?.cleanTitle ?: md.meals?.title ?: ""
-                key == fav || md.meals?.title == fav
+                normalizeFavoriteKey(key) == favNorm ||
+                    normalizeFavoriteKey(md.meals?.title ?: "") == favNorm
             }
+            val mostRecent = history.firstOrNull(matches)
             // Find the closest upcoming match across every canteen.
             val nextOccurrence = upcomingMap.entries
                 .flatMap { (canteenAndDate, meals) ->
@@ -79,17 +83,13 @@ fun FavoritesScreen(
                 }
                 .filter { (_, date, md) ->
                     if (date < today) return@filter false
-                    val key = md.meals?.cleanTitle ?: md.meals?.title ?: ""
-                    (key == fav || md.meals?.title == fav)
+                    matches(md)
                 }
                 .sortedBy { it.second }
                 .firstOrNull()
             FavoriteRow(
                 title = fav,
-                count = history.count { md ->
-                    val key = md.meals?.cleanTitle ?: md.meals?.title ?: ""
-                    key == fav || md.meals?.title == fav
-                },
+                count = history.count(matches),
                 mostRecent = mostRecent,
                 next = nextOccurrence,
             )

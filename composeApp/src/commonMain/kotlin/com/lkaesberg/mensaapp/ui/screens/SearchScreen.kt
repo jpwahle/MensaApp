@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -40,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.lkaesberg.mensaapp.ui.MensaTheme
@@ -56,6 +57,7 @@ import kotlinx.datetime.todayIn
 fun SearchScreen(
     state: MealsAppState,
     onBack: () -> Unit,
+    onOpenMealDetail: (MealDate) -> Unit = {},
 ) {
     val palette = MensaTheme.palette
     val mealsByDate by state.mealsByDate.collectAsState()
@@ -68,8 +70,10 @@ fun SearchScreen(
     val filtered = remember(mealsByDate, query, activeFilters.value) {
         val all = mealsByDate.flatMap { (d, list) -> list.map { d to it } }
             .filter { (_, md) ->
-                val txt = (md.meals?.cleanTitle ?: md.meals?.title ?: "")
-                txt.contains(query, ignoreCase = true)
+                val title = md.meals?.cleanTitle ?: md.meals?.title ?: ""
+                if (title.contains(query, ignoreCase = true)) return@filter true
+                val sides = md.meals?.sides.orEmpty()
+                sides.any { it.contains(query, ignoreCase = true) }
             }
             .filter { (_, md) ->
                 if (activeFilters.value.isEmpty()) true
@@ -173,49 +177,92 @@ fun SearchScreen(
         )
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(filtered, key = { (_, md) -> md.id }) { (d, md) ->
-                val enriched = MealEnrichment.enrich(md)
-                val dayLabel = listOf("MO", "DI", "MI", "DO", "FR", "SA", "SO")[(d.dayOfWeek.isoDayNumber - 1).coerceIn(0, 6)]
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(palette.surface)
-                        .border(1.dp, palette.hair, RoundedCornerShape(12.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Plate(meal = md.meals, size = 64.dp, radius = 10.dp)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "${md.category.uppercase()} · $dayLabel ${d.dayOfMonth}.",
-                            color = palette.forest,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                        )
-                        Text(
-                            text = enriched.cleanTitle.ifBlank { md.meals?.title.orEmpty() },
-                            color = palette.ink,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 16.sp,
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(Icons.Filled.Place, null, tint = palette.sub, modifier = Modifier.size(10.dp))
-                            Text(selectedCanteen?.name.orEmpty(), color = palette.sub, fontSize = 11.sp)
+            var previousDate: LocalDate? = null
+            filtered.forEach { (d, md) ->
+                if (d != previousDate) {
+                    item(key = "header-$d") { DaySeparator(date = d, today = today) }
+                    previousDate = d
+                }
+                item(key = "meal-${md.id}") {
+                    val enriched = MealEnrichment.enrich(md)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.surface)
+                            .border(1.dp, palette.hair, RoundedCornerShape(12.dp))
+                            .clickable { onOpenMealDetail(md) }
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Plate(meal = md.meals, size = 64.dp, radius = 10.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = md.category.uppercase(),
+                                color = palette.forest,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
+                            )
+                            Text(
+                                text = enriched.cleanTitle.ifBlank { md.meals?.title.orEmpty() },
+                                color = palette.ink,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 16.sp,
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(Icons.Filled.Place, null, tint = palette.sub, modifier = Modifier.size(10.dp))
+                                Text(selectedCanteen?.name.orEmpty(), color = palette.sub, fontSize = 11.sp)
+                            }
                         }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        md.meals?.icons.orEmpty().forEach { kind -> DietPip(kind = kind, size = 11.dp) }
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            md.meals?.icons.orEmpty().forEach { kind -> DietPip(kind = kind, size = 11.dp) }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DaySeparator(date: LocalDate, today: LocalDate) {
+    val palette = MensaTheme.palette
+    val diff = (date.toEpochDays() - today.toEpochDays()).toInt()
+    val weekdays = listOf("MONTAG", "DIENSTAG", "MITTWOCH", "DONNERSTAG", "FREITAG", "SAMSTAG", "SONNTAG")
+    val months = listOf("Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez")
+    val primary = when (diff) {
+        0 -> "HEUTE"
+        1 -> "MORGEN"
+        else -> weekdays.getOrElse((date.dayOfWeek.isoDayNumber - 1).coerceIn(0, 6)) { "" }
+    }
+    val sub = "${date.dayOfMonth}. ${months[(date.monthNumber - 1).coerceIn(0, 11)]}"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 12.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = primary,
+            color = palette.forest,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp,
+        )
+        Box(modifier = Modifier.size(3.dp).clip(CircleShape).background(palette.sub))
+        Text(
+            text = sub,
+            color = palette.sub,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }

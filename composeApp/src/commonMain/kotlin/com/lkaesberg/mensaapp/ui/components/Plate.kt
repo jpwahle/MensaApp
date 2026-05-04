@@ -92,7 +92,7 @@ private fun PlatePlaceholder(
     Box(modifier = modifier.background(bg))
 }
 
-private fun plateUrl(meal: Meal?): String {
+internal fun plateUrl(meal: Meal?): String {
     val base = "${SupabaseConfig.SUPABASE_URL}/storage/v1/object/public/"
     val img = meal?.imagePath?.replace(".png", ".jpg")
     val generic = meal?.imagePathGeneric?.replace(".png", ".jpg")

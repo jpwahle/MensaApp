@@ -22,22 +22,37 @@ class FavoritesManager(private val settings: Settings) {
         settings.putString(FAVORITES_KEY, favorites.joinToString(","))
     }
 
-    fun toggleFavorite(mealId: String) {
+    /**
+     * Toggle a meal title in the favourites set. Matching is case- and
+     * whitespace-insensitive so the same dish at a different canteen counts as
+     * a single favourite even when the scraper produced slightly different
+     * strings (extra spaces, casing, etc.). Removing strips every stored entry
+     * that normalises to the same key, so any duplicates accumulated before
+     * this normalisation existed get cleaned up on the next un-star.
+     */
+    fun toggleFavorite(title: String) {
+        val n = normalizeFavoriteKey(title)
         val current = _favorites.value.toMutableSet()
-        if (current.contains(mealId)) {
-            current.remove(mealId)
-        } else {
-            current.add(mealId)
-        }
+        val removed = current.removeAll { normalizeFavoriteKey(it) == n }
+        if (!removed) current.add(title.trim())
         _favorites.value = current
         saveFavorites(current)
     }
 
-    fun isFavorite(mealId: String): Boolean {
-        return _favorites.value.contains(mealId)
-    }
+    fun isFavorite(title: String): Boolean = _favorites.value.containsFavorite(title)
 
     companion object {
         private const val FAVORITES_KEY = "favorite_meals"
     }
+}
+
+/** Lowercase + collapse whitespace so titles match across canteens. */
+internal fun normalizeFavoriteKey(s: String): String =
+    s.trim().lowercase().replace(Regex("\\s+"), " ")
+
+/** Membership check that ignores casing / whitespace differences. */
+internal fun Set<String>.containsFavorite(title: String): Boolean {
+    if (title.isBlank()) return false
+    val n = normalizeFavoriteKey(title)
+    return any { normalizeFavoriteKey(it) == n }
 }
