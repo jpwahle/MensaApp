@@ -8,6 +8,8 @@ data class Canteen(
     val id: String,
     val name: String,
     @SerialName("created_at") val createdAt: String? = null,
+    val slug: String? = null,
+    @SerialName("external_id") val externalId: Int? = null,
 )
 
 @Serializable
@@ -27,6 +29,15 @@ data class Meal(
     val sides: List<String>? = null,
     val allergens: List<String>? = null,
     val additives: List<String>? = null,
+
+    // Added by the 2026-05-05 API migration. external_id is the upstream
+    // dish id; title_en/description_en/sides_en come from the new endpoint.
+    @SerialName("external_id") val externalId: Int? = null,
+    @SerialName("title_en") val titleEn: String? = null,
+    @SerialName("description_en") val descriptionEn: String? = null,
+    @SerialName("sides_en") val sidesEn: List<String>? = null,
+    @SerialName("rating_avg") val ratingAvg: Float? = null,
+    @SerialName("recipe_name") val recipeName: String? = null,
 )
 
 @Serializable
@@ -45,8 +56,37 @@ data class MealDate(
     // "lunch" | "afternoon" | null. Drives the time-separator on the feed.
     @SerialName("meal_period") val mealPeriod: String? = null,
 
+    // Per-dish prices populated by the new API scraper (2026-05-05).
+    // Nullable for rows scraped before the migration.
+    @SerialName("price_students") val priceStudents: String? = null,
+    @SerialName("price_employees") val priceEmployees: String? = null,
+    @SerialName("price_guests") val priceGuests: String? = null,
+    @SerialName("price_students_cents") val priceStudentsCents: Int? = null,
+    @SerialName("price_employees_cents") val priceEmployeesCents: Int? = null,
+    @SerialName("price_guests_cents") val priceGuestsCents: Int? = null,
+
     // Embedded join, will be null if not requested
     val meals: Meal? = null,
+)
+
+@Serializable
+data class CanteenHours(
+    @SerialName("canteen_id") val canteenId: String,
+    @SerialName("day_of_week") val dayOfWeek: Int, // ISO 1=Mon..7=Sun
+    @SerialName("open_time") val openTime: String? = null, // "HH:MM:SS" or null
+    @SerialName("close_time") val closeTime: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)
+
+@Serializable
+data class CanteenOccupancy(
+    @SerialName("canteen_id") val canteenId: String,
+    @SerialName("observed_at") val observedAt: String,
+    @SerialName("sales_current") val salesCurrent: Double? = null,
+    @SerialName("sales_avg_weekday") val salesAvgWeekday: Double? = null,
+    @SerialName("sales_avg_yearly") val salesAvgYearly: Double? = null,
+    val color: String? = null,
+    @SerialName("status_key") val statusKey: String? = null,
 )
 
 @Serializable

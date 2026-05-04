@@ -156,18 +156,9 @@ object CanteenStaticData {
             ),
             fallbackPrices = emptyList(),
         ),
-        CanteenInfo(
-            slug = "nordmensa",
-            name = "Nordmensa",
-            address = "Grisebachstraße 10, 37077 Göttingen",
-            lat = 51.5523, lng = 9.9447,
-            walkMinFromCenter = 12, distance = "950 m",
-            hours = listOf(
-                weekdayHours("11:30", "14:15"),
-                saturdayClosed, sundayClosed,
-            ),
-            fallbackPrices = emptyList(),
-        ),
+        // Nordmensa was removed (2026-05-05): the official mobile-app API
+        // no longer lists it (no menu, no hours, no occupancy), so showing
+        // the entry led to a permanently empty surface.
     )
 
     val byName: Map<String, CanteenInfo> = all.associateBy { it.name }

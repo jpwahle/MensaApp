@@ -53,6 +53,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.runtime.CompositionLocalProvider
+import com.lkaesberg.mensaapp.i18n.LocalAppLocale
+import com.lkaesberg.mensaapp.i18n.LocalStrings
+import com.lkaesberg.mensaapp.i18n.stringsFor
 import com.lkaesberg.mensaapp.notifications.NotificationScheduler
 import com.lkaesberg.mensaapp.ui.MensaAppTheme
 import com.lkaesberg.mensaapp.ui.MensaTheme
@@ -95,8 +99,13 @@ fun App(
     }
     var isDarkMode by remember { mutableStateOf(settings.getBoolean("dark_mode", false)) }
     val onboarded = remember { settings.getBoolean("onboarded", false) }
+    val locale by state.locale.collectAsState()
 
     MensaAppTheme(useDarkTheme = isDarkMode) {
+      CompositionLocalProvider(
+          LocalStrings provides stringsFor(locale),
+          LocalAppLocale provides locale,
+      ) {
         val navController = rememberNavController()
         val scope = rememberCoroutineScope()
         var menuOpen by remember { mutableStateOf(false) }
@@ -218,6 +227,7 @@ fun App(
                 },
             )
         }
+      } // end CompositionLocalProvider(LocalStrings)
     }
 }
 
@@ -236,6 +246,7 @@ private fun MenuSheet(
             action()
         }
     }
+    val s = LocalStrings.current
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = sheetState,
@@ -243,18 +254,18 @@ private fun MenuSheet(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                text = "Menü",
+                text = if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Menü" else "Menu",
                 color = palette.ink,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.3).sp,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-            MenuItem("Mensa wählen", "Standorte", Icons.Filled.Apartment) { dismissThen { onNavigate(Route.CanteenPicker) } }
-            MenuItem("Favoriten", "Lieblingsgerichte verwalten", Icons.Filled.Star) { dismissThen { onNavigate(Route.Favorites) } }
-            MenuItem("Alle Gerichte", "Im gesamten Archiv suchen", Icons.Filled.Inventory2) { dismissThen { onNavigate(Route.Archive) } }
-            MenuItem("Gerichte-Statistik", "Häufigkeit + zuletzt gesehen", Icons.Filled.Analytics) { dismissThen { onNavigate(Route.DishStats) } }
-            MenuItem("Einstellungen", "Personenkreis, Erscheinungsbild, Push", Icons.Filled.Settings) { dismissThen { onNavigate(Route.Settings) } }
+            MenuItem(s.pickCanteen, if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Standorte" else "Locations", Icons.Filled.Apartment) { dismissThen { onNavigate(Route.CanteenPicker) } }
+            MenuItem(s.favorites, if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Lieblingsgerichte verwalten" else "Manage favorite dishes", Icons.Filled.Star) { dismissThen { onNavigate(Route.Favorites) } }
+            MenuItem(s.allMealsArchive, if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Im gesamten Archiv suchen" else "Search the full archive", Icons.Filled.Inventory2) { dismissThen { onNavigate(Route.Archive) } }
+            MenuItem(s.dishStats, if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Häufigkeit + zuletzt gesehen" else "Frequency & last seen", Icons.Filled.Analytics) { dismissThen { onNavigate(Route.DishStats) } }
+            MenuItem(s.settings, if (s == com.lkaesberg.mensaapp.i18n.StringsDe) "Personenkreis, Erscheinungsbild, Push" else "Group, appearance, push", Icons.Filled.Settings) { dismissThen { onNavigate(Route.Settings) } }
         }
     }
 }

@@ -2,6 +2,7 @@ package com.lkaesberg.mensaapp
 
 import com.lkaesberg.mensaapp.data.CanteenInfo
 import com.lkaesberg.mensaapp.data.CanteenStaticData
+import com.lkaesberg.mensaapp.data.Locale
 import com.lkaesberg.mensaapp.data.UserRole
 import com.lkaesberg.mensaapp.notifications.NotificationScheduler
 import com.russhwolf.settings.Settings
@@ -11,7 +12,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Shared, conversation-scoped state for the redesign — meals/canteens/prices
@@ -51,6 +59,34 @@ class MealsAppState(
         settings.putString(UserRole.SETTINGS_KEY, role.key)
     }
 
+    private val _locale = MutableStateFlow(Locale.fromTag(settings.getStringOrNull(LOCALE_KEY)))
+    val locale: StateFlow<Locale> = _locale.asStateFlow()
+
+    fun setLocale(locale: Locale) {
+        _locale.value = locale
+        settings.putString(LOCALE_KEY, locale.tag)
+    }
+
+    /**
+     * Weekly hours pattern keyed by canteen id (Map<canteenId, List<CanteenHours>>).
+     * Loaded once at launch via [refreshHoursAndOccupancy].
+     */
+    private val _canteenHours = MutableStateFlow<Map<String, List<CanteenHours>>>(emptyMap())
+    val canteenHours: StateFlow<Map<String, List<CanteenHours>>> = _canteenHours.asStateFlow()
+
+    /** Latest occupancy snapshot per canteen id. */
+    private val _occupancy = MutableStateFlow<Map<String, CanteenOccupancy>>(emptyMap())
+    val occupancy: StateFlow<Map<String, CanteenOccupancy>> = _occupancy.asStateFlow()
+
+    fun refreshHoursAndOccupancy(scope: CoroutineScope) {
+        scope.launch {
+            _canteenHours.value = repository.getCanteenHours().groupBy { it.canteenId }
+        }
+        scope.launch {
+            _occupancy.value = repository.getOccupancyLatest().associateBy { it.canteenId }
+        }
+    }
+
     /** Canteen IDs the user has hidden from picker / upcoming-favourite lists. */
     private val _disabledCanteenIds = MutableStateFlow(loadDisabledCanteens())
     val disabledCanteenIds: StateFlow<Set<String>> = _disabledCanteenIds.asStateFlow()
@@ -70,6 +106,7 @@ class MealsAppState(
 
     private companion object {
         const val DISABLED_CANTEENS_KEY = "disabled_canteens"
+        const val LOCALE_KEY = "locale"
     }
 
     /**
@@ -86,7 +123,11 @@ class MealsAppState(
 
     fun loadCanteens(scope: CoroutineScope) {
         scope.launch {
-            val list = repository.getCanteens()
+            // Pull all canteens, then drop ones the static metadata doesn't
+            // recognise (e.g. cafés synced via mensa-hours-sync that we don't
+            // surface in the picker). This keeps Nordmensa-style ghosts off
+            // the screen if the row lingers in DB.
+            val list = repository.getCanteens().filter { CanteenStaticData.matchFor(it.name) != null }
             _canteens.value = list
             if (_selectedCanteen.value == null) {
                 val rememberedSlug = settings.getStringOrNull("selected_canteen_slug")
@@ -97,6 +138,7 @@ class MealsAppState(
                 if (match != null) selectCanteen(scope, match)
             }
         }
+        refreshHoursAndOccupancy(scope)
     }
 
     fun selectCanteen(scope: CoroutineScope, canteen: Canteen) {
@@ -135,6 +177,55 @@ class MealsAppState(
         loadCanteens(scope)
         loadMealsForSelected(scope)
         loadPricesForSelected(scope)
+    }
+
+    // ─── canteen status (DB hours first, fall back to CanteenStaticData) ───
+
+    private fun nowDt(): LocalDateTime =
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+
+    private fun parseDbTime(s: String?): LocalTime? {
+        if (s.isNullOrBlank()) return null
+        val parts = s.split(":")
+        return runCatching {
+            LocalTime(parts[0].toInt(), parts[1].toInt())
+        }.getOrNull()
+    }
+
+    private fun dbHoursForToday(canteen: Canteen, dow: DayOfWeek): Pair<LocalTime, LocalTime>? {
+        val rows = _canteenHours.value[canteen.id] ?: return null
+        val row = rows.firstOrNull { it.dayOfWeek == dow.isoDayNumber } ?: return null
+        val open = parseDbTime(row.openTime) ?: return null
+        val close = parseDbTime(row.closeTime) ?: return null
+        return open to close
+    }
+
+    fun openNow(canteen: Canteen): Boolean {
+        val now = nowDt()
+        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (open, close) ->
+            return now.time >= open && now.time < close
+        }
+        // Static fallback: e.g. before mensa-hours-sync has run.
+        return CanteenStaticData.matchFor(canteen.name)
+            ?.let { CanteenStaticData.openNow(it, now) } ?: false
+    }
+
+    fun pastClosingTime(canteen: Canteen): Boolean {
+        val now = nowDt()
+        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (_, close) ->
+            return now.time >= close
+        }
+        return CanteenStaticData.matchFor(canteen.name)
+            ?.let { CanteenStaticData.pastClosingTime(it, now) } ?: true
+    }
+
+    fun closesAt(canteen: Canteen): String? {
+        val now = nowDt()
+        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (_, close) ->
+            return "${close.hour.toString().padStart(2, '0')}:${close.minute.toString().padStart(2, '0')}"
+        }
+        return CanteenStaticData.matchFor(canteen.name)
+            ?.let { CanteenStaticData.closesAt(it, now) }
     }
 
     /**

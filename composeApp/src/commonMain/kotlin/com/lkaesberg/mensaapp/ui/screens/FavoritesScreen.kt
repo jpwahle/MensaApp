@@ -39,6 +39,7 @@ import com.lkaesberg.mensaapp.Canteen
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.i18n.LocalStrings
 import com.lkaesberg.mensaapp.normalizeFavoriteKey
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
@@ -99,10 +100,11 @@ fun FavoritesScreen(
         it.next != null && (it.next.second.toEpochDays() - today.toEpochDays()).toInt() in 0..3
     }
 
+    val s = LocalStrings.current
     Column(modifier = Modifier.fillMaxSize().background(palette.paper)) {
         MTopBar(
-            title = "Favoriten",
-            subtitle = "${favorites.size} Gerichte · $upcoming kommen bald",
+            title = s.favorites,
+            subtitle = s.favoritesSummary(favorites.size, upcoming),
             onBack = onBack,
             actions = {
                 Box(
@@ -123,8 +125,8 @@ fun FavoritesScreen(
                     .background(palette.forest)
                     .padding(14.dp),
             ) {
-                Text("NÄCHSTE 3 TAGE", color = Color.White.copy(alpha = 0.85f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Text("$upcoming Favoriten kommen!", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp)
+                Text(s.nextThreeDays, color = Color.White.copy(alpha = 0.85f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text(s.favsArrivingSoon(upcoming), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp)
                 val sample = favorites.filter { it.next != null }.take(3).joinToString(" · ") { it.title.take(20) }
                 Text(sample, color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
             }
@@ -137,8 +139,8 @@ fun FavoritesScreen(
             ) {
                 Text("☆", fontSize = 36.sp, color = palette.sub)
                 Spacer(Modifier.height(8.dp))
-                Text("Noch keine Favoriten", color = palette.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("Tippe das Stern-Symbol auf einem Gericht, um es zu favorisieren.", color = palette.sub, fontSize = 12.sp)
+                Text(s.noFavoritesYet, color = palette.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(s.noFavoritesHint, color = palette.sub, fontSize = 12.sp)
             }
         } else {
             LazyColumn(
@@ -149,12 +151,12 @@ fun FavoritesScreen(
                     val nextLabel = f.next?.let { (canteen, date, _) ->
                         val diff = (date.toEpochDays() - today.toEpochDays()).toInt()
                         val day = when (diff) {
-                            0 -> "Heute"
-                            1 -> "Morgen"
-                            else -> "${listOf("Mo","Di","Mi","Do","Fr","Sa","So")[(date.dayOfWeek.isoDayNumber-1).coerceIn(0,6)]} ${date.dayOfMonth}."
+                            0 -> s.today
+                            1 -> s.tomorrow
+                            else -> "${s.weekdaysShort[(date.dayOfWeek.isoDayNumber-1).coerceIn(0,6)]} ${date.dayOfMonth}."
                         }
                         "$day · ${canteen.name}"
-                    } ?: "Nicht eingeplant"
+                    } ?: s.notScheduled
                     val isSoon = f.next != null
                     Row(
                         modifier = Modifier
@@ -185,8 +187,8 @@ fun FavoritesScreen(
                                 )
                             }
                             Text(
-                                text = "${f.count}× erlebt" + (f.mostRecent?.servedOn?.let {
-                                    runCatching { LocalDate.parse(it) }.getOrNull()?.let { d -> " · zuletzt ${relativeAgo(today, d)}" }
+                                text = s.timesEaten(f.count) + (f.mostRecent?.servedOn?.let {
+                                    runCatching { LocalDate.parse(it) }.getOrNull()?.let { d -> " · " + s.lastEaten(relativeAgo(today, d)) }
                                 } ?: ""),
                                 color = palette.sub,
                                 fontSize = 10.sp,

@@ -40,6 +40,9 @@ import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.i18n.LocalAppLocale
+import com.lkaesberg.mensaapp.i18n.LocalStrings
+import com.lkaesberg.mensaapp.i18n.titleFor
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
 import com.lkaesberg.mensaapp.ui.components.Plate
@@ -90,13 +93,14 @@ fun UpcomingFavoritesScreen(
 
     val totalHits = groupedByDate.sumOf { it.second.size }
 
+    val s = LocalStrings.current
     Column(modifier = Modifier.fillMaxSize().background(palette.paper)) {
         MTopBar(
-            title = "Kommende Favoriten",
+            title = s.upcomingFavorites,
             subtitle = when {
-                favoriteIds.isEmpty() -> "Noch keine Favoriten"
-                totalHits == 0 -> "Aktuell nichts geplant"
-                else -> "$totalHits Treffer · ${groupedByDate.size} ${if (groupedByDate.size == 1) "Tag" else "Tage"}"
+                favoriteIds.isEmpty() -> s.noFavoritesYet
+                totalHits == 0 -> s.nothingPlanned
+                else -> "$totalHits · ${groupedByDate.size} ${if (groupedByDate.size == 1) s.day else s.days}"
             },
             onBack = onBack,
             actions = {
@@ -140,6 +144,7 @@ fun UpcomingFavoritesScreen(
 @Composable
 private fun EmptyContent(hasFavorites: Boolean) {
     val palette = MensaTheme.palette
+    val s = LocalStrings.current
     Column(
         modifier = Modifier.fillMaxSize().padding(40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -148,17 +153,14 @@ private fun EmptyContent(hasFavorites: Boolean) {
         Text("☆", fontSize = 36.sp, color = palette.sub)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = if (hasFavorites) "Keine Favoriten geplant" else "Noch keine Favoriten",
+            text = if (hasFavorites) s.noFavoritesPlanned else s.noFavoritesYet,
             color = palette.ink,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = if (hasFavorites)
-                "Schau später vorbei – neue Speisepläne werden täglich geladen."
-            else
-                "Tippe das Stern-Symbol auf einem Gericht, um es zu favorisieren.",
+            text = if (hasFavorites) s.checkBackHint else s.noFavoritesHint,
             color = palette.sub,
             fontSize = 12.sp,
         )
@@ -169,13 +171,12 @@ private fun EmptyContent(hasFavorites: Boolean) {
 private fun DayHeader(date: LocalDate, today: LocalDate, count: Int) {
     val palette = MensaTheme.palette
     val diff = (date.toEpochDays() - today.toEpochDays()).toInt()
-    val weekday = listOf("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
-        .getOrElse((date.dayOfWeek.isoDayNumber - 1).coerceIn(0, 6)) { "" }
-    val months = listOf("Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez")
-    val day = "${date.dayOfMonth}. ${months[(date.monthNumber - 1).coerceIn(0, 11)]}"
+    val s = LocalStrings.current
+    val weekday = s.weekdaysLong.getOrElse((date.dayOfWeek.isoDayNumber - 1).coerceIn(0, 6)) { "" }
+    val day = "${date.dayOfMonth}. ${s.monthsShort[(date.monthNumber - 1).coerceIn(0, 11)]}"
     val primary = when (diff) {
-        0 -> "HEUTE"
-        1 -> "MORGEN"
+        0 -> s.today.uppercase()
+        1 -> s.tomorrow.uppercase()
         else -> weekday.uppercase()
     }
     Row(
@@ -217,6 +218,7 @@ private fun UpcomingFavoriteRow(
 ) {
     val palette = MensaTheme.palette
     val enriched = remember(md.id) { MealEnrichment.enrich(md) }
+    val locale = LocalAppLocale.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,7 +233,8 @@ private fun UpcomingFavoriteRow(
         Plate(meal = md.meals, size = 56.dp, radius = 12.dp)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = enriched.cleanTitle.ifBlank { md.meals?.title ?: "" },
+                text = md.meals?.titleFor(locale)?.takeIf { it.isNotBlank() }
+                    ?: enriched.cleanTitle.ifBlank { md.meals?.title ?: "" },
                 color = palette.ink,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,

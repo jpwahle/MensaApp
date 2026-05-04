@@ -39,6 +39,7 @@ import com.lkaesberg.mensaapp.data.CanteenStaticData
 import com.lkaesberg.mensaapp.data.HoursEntry
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
+import com.lkaesberg.mensaapp.ui.components.OccupancyChip
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
@@ -57,10 +58,12 @@ fun CanteenPickerScreen(
     val todayDow = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()).dayOfWeek }
 
     val visibleCanteens = canteens.filter { it.id !in disabledCanteenIds }
+    val occupancyMap by state.occupancy.collectAsState()
+    val s = com.lkaesberg.mensaapp.i18n.LocalStrings.current
     Column(modifier = Modifier.fillMaxSize().background(palette.paper)) {
         MTopBar(
-            title = "Mensa wählen",
-            subtitle = "${visibleCanteens.size} Standorte",
+            title = s.pickCanteen,
+            subtitle = s.canteenPickerSubtitle(visibleCanteens.size),
             onBack = onBack,
         )
         LazyColumn(
@@ -72,7 +75,7 @@ fun CanteenPickerScreen(
             items(sortedCanteens, key = { it.id }) { canteen ->
                 val info = CanteenStaticData.matchFor(canteen.name)
                 val isActive = canteen.id == selected?.id
-                val isOpen = info?.let { CanteenStaticData.openNow(it) } ?: false
+                val isOpen = state.openNow(canteen)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -134,7 +137,7 @@ fun CanteenPickerScreen(
                         ) {
                             Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(if (isOpen) palette.open else palette.closed))
                             Text(
-                                text = if (isOpen) "bis ${CanteenStaticData.closesAt(info!!)}" else "geschlossen",
+                                text = if (isOpen) "${if (s.openLabel == "Open") "until" else "bis"} ${state.closesAt(canteen)}" else s.closedLabel.lowercase(),
                                 color = if (isOpen) palette.open else palette.closed,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -142,6 +145,17 @@ fun CanteenPickerScreen(
                             if (info != null) {
                                 Text("·", color = palette.sub.copy(alpha = 0.5f), fontSize = 11.sp)
                                 Text(info.address.substringAfter(", ").take(30), color = palette.sub, fontSize = 11.sp)
+                            }
+                        }
+                        if (isOpen) {
+                            Row(
+                                modifier = Modifier.padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                OccupancyChip(
+                                    occupancy = occupancyMap[canteen.id],
+                                    isOpen = true,
+                                )
                             }
                         }
                         if (info != null) {

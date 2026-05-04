@@ -33,7 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealsAppState
+import com.lkaesberg.mensaapp.data.Locale
 import com.lkaesberg.mensaapp.data.UserRole
+import com.lkaesberg.mensaapp.i18n.LocalStrings
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
 
@@ -64,7 +66,7 @@ fun SettingsScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(palette.paper)) {
-        MTopBar(title = "Einstellungen", onBack = onBack)
+        MTopBar(title = LocalStrings.current.settings, onBack = onBack)
         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
             SectionHeader("PERSON")
             Column(modifier = Modifier.background(palette.surface).padding(16.dp)) {
@@ -103,6 +105,38 @@ fun SettingsScreen(
                 last = true,
                 onChange = { onToggleDarkMode() },
             )
+
+            // Sprache / Language picker (DE/EN). Wired to state.locale; changes
+            // immediately re-render the whole tree via LocalStrings.
+            val locale by state.locale.collectAsState()
+            val s = LocalStrings.current
+            SectionHeader(s.settingsLanguage.uppercase())
+            Column(modifier = Modifier.background(palette.surface).padding(16.dp)) {
+                Text(s.settingsLanguage, color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(Locale.De to s.settingsLanguageDe, Locale.En to s.settingsLanguageEn).forEach { (option, label) ->
+                        val active = locale == option
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(100.dp))
+                                .background(if (active) palette.forest else palette.paper)
+                                .border(1.dp, if (active) Color.Transparent else palette.hair, RoundedCornerShape(100.dp))
+                                .clickable { state.setLocale(option) }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                label,
+                                color = if (active) Color.White else palette.ink,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+            }
 
             if (canteens.isNotEmpty()) {
                 SectionHeader("MENSEN")

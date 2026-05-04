@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.data.EnrichedMeal
 import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.i18n.LocalAppLocale
+import com.lkaesberg.mensaapp.i18n.LocalStrings
+import com.lkaesberg.mensaapp.i18n.sidesFor
+import com.lkaesberg.mensaapp.i18n.titleFor
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.MonoNumericStyle
 
@@ -58,6 +62,13 @@ fun MealCard(
 ) {
     val palette = MensaTheme.palette
     val isDeactivated = mealDate.deactivatedAt != null || forceDeactivated
+    val s = LocalStrings.current
+    val locale = LocalAppLocale.current
+    val titleText = mealDate.meals?.titleFor(locale)?.takeIf { it.isNotBlank() }
+        ?: enriched.cleanTitle.ifBlank { mealDate.meals?.title.orEmpty() }
+    val sidesText = mealDate.meals?.sidesFor(locale).orEmpty()
+        .ifEmpty { enriched.sides }
+    val withWord = if (locale == com.lkaesberg.mensaapp.data.Locale.De) "mit" else "with"
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -90,14 +101,14 @@ fun MealCard(
                     if (isFavorite) {
                         Icon(
                             imageVector = Icons.Filled.Star,
-                            contentDescription = "Favorit entfernen",
+                            contentDescription = s.unfavorite,
                             tint = palette.amber,
                             modifier = Modifier.size(20.dp),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Outlined.StarOutline,
-                            contentDescription = "Favorisieren",
+                            contentDescription = s.favorite,
                             tint = palette.sub,
                             modifier = Modifier.size(20.dp),
                         )
@@ -106,7 +117,7 @@ fun MealCard(
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                text = enriched.cleanTitle.ifBlank { mealDate.meals?.title ?: "" },
+                text = titleText,
                 color = palette.ink,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -114,10 +125,10 @@ fun MealCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (enriched.sides.isNotEmpty()) {
+            if (sidesText.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "mit " + enriched.sides.joinToString(", "),
+                    text = "$withWord " + sidesText.joinToString(", "),
                     color = palette.sub,
                     fontSize = 12.sp,
                     lineHeight = 15.sp,

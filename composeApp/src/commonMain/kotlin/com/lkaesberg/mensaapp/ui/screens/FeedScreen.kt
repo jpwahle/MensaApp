@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lkaesberg.mensaapp.Canteen
 import com.lkaesberg.mensaapp.MealDate
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.containsFavorite
@@ -59,16 +61,19 @@ import com.lkaesberg.mensaapp.ui.components.DateChip
 import com.lkaesberg.mensaapp.ui.components.EmptyState
 import com.lkaesberg.mensaapp.ui.components.FilterChipsRow
 import com.lkaesberg.mensaapp.ui.components.MealCard
+import com.lkaesberg.mensaapp.ui.components.OccupancyChip
 import com.lkaesberg.mensaapp.ui.components.TimeSeparator
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
+import kotlinx.datetime.toLocalDateTime
 
 @Composable
 fun FeedScreen(
@@ -92,24 +97,32 @@ fun FeedScreen(
 
     val tz = remember { TimeZone.currentSystemDefault() }
     val today = remember(Clock.System.todayIn(tz)) { Clock.System.todayIn(tz) }
-    val weekDates = remember(today) {
-        // Anchor at Monday of the current week, expose 5 weekdays.
-        val mondayOffset = (today.dayOfWeek.isoDayNumber - 1).coerceAtLeast(0)
-        val monday = today.minus(mondayOffset, DateTimeUnit.DAY)
-        (0 until 5).map { monday.plus(it, DateTimeUnit.DAY) }
+    // Date strip at the top: rolling next-6-days window starting today.
+    // Includes weekends — the menu API serves Saturday plans for some
+    // mensas, and excluding them (the old Mon–Fri behaviour) hid the
+    // weekend slots entirely.
+    val nextSix = remember(today) {
+        (0 until 6).map { today.plus(it, DateTimeUnit.DAY) }
     }
-    // The visible day is whatever page the pager is on. rememberPagerState
-    // already saves its current page across navigation back from MealDetail.
-    val initialPage = remember(weekDates, today) {
-        weekDates.indexOf(weekDates.firstOrNull { it >= today } ?: today).coerceAtLeast(0)
+    // Pager covers a wider window so the calendar picker can jump to any
+    // day the scraper has data for (the long-mode scrape pulls ~30 days
+    // ahead). Sort by epoch days so the resulting indexes map cleanly.
+    val datesWithData: Set<LocalDate> = remember(mealsByDate.keys, today) {
+        mealsByDate.keys.filter { it.toEpochDays() >= today.toEpochDays() }.toSet()
     }
-    val pagerState = rememberPagerState(initialPage = initialPage) { weekDates.size }
-    val selectedDate = weekDates.getOrElse(pagerState.currentPage) { today }
+    val allDates: List<LocalDate> = remember(nextSix, datesWithData) {
+        (nextSix + datesWithData).distinct().sortedBy { it.toEpochDays() }
+    }
+    val initialPage = remember(allDates, today) {
+        allDates.indexOf(today).coerceAtLeast(0)
+    }
+    val pagerState = rememberPagerState(initialPage = initialPage) { allDates.size }
+    val selectedDate = allDates.getOrElse(pagerState.currentPage) { today }
 
     val canteenInfo = remember(selectedCanteen) {
         selectedCanteen?.name?.let { CanteenStaticData.matchFor(it) }
     }
-    val isCanteenPastClosing = canteenInfo?.let { CanteenStaticData.pastClosingTime(it) } ?: false
+    val isCanteenPastClosing = selectedCanteen?.let { state.pastClosingTime(it) } ?: false
 
     // Once per session per canteen: if the canteen is already closed for today,
     // jump to tomorrow so the default view is the upcoming day. The user can
@@ -119,9 +132,10 @@ fun FeedScreen(
         val canteenId = selectedCanteen?.id ?: return@LaunchedEffect
         if (autoBumpedForCanteen == canteenId) return@LaunchedEffect
         autoBumpedForCanteen = canteenId
-        if (isCanteenPastClosing && pagerState.currentPage == weekDates.indexOf(today)) {
+        if (isCanteenPastClosing && pagerState.currentPage == allDates.indexOf(today)) {
             val tomorrow = today.plus(1, DateTimeUnit.DAY)
-            val targetIdx = weekDates.indexOfFirst { it >= tomorrow }
+            val tomorrowEpoch = tomorrow.toEpochDays()
+            val targetIdx = allDates.indexOfFirst { it.toEpochDays() >= tomorrowEpoch }
             if (targetIdx >= 0) pagerState.scrollToPage(targetIdx)
         }
     }
@@ -131,30 +145,49 @@ fun FeedScreen(
             .fillMaxSize()
             .background(palette.paper)
     ) {
+        var showDatePicker by remember { mutableStateOf(false) }
         TopBar(
             canteenName = selectedCanteen?.name ?: "—",
             onMenuClick = onOpenMenu,
             onCanteenClick = onOpenCanteenPicker,
             onSearchClick = onOpenSearch,
             onNotificationClick = onOpenNotifications,
+            onCalendarClick = { showDatePicker = true },
             unreadDot = (favoriteIds.isNotEmpty()),
         )
         StatusRow(
-            canteenInfo = canteenInfo,
+            state = state,
+            canteen = selectedCanteen,
             mealCount = mealsByDate[selectedDate]?.size ?: 0,
         )
         Spacer(Modifier.height(8.dp))
         DateStrip(
-            dates = weekDates,
+            dates = nextSix,
             selected = selectedDate,
             today = today,
             mealsByDate = mealsByDate,
             favoriteIds = favoriteIds,
             onSelect = { d ->
-                val idx = weekDates.indexOf(d).coerceAtLeast(0)
+                val idx = allDates.indexOf(d).coerceAtLeast(0)
                 scope.launch { pagerState.animateScrollToPage(idx) }
             },
         )
+        Spacer(Modifier.height(6.dp))
+        SelectedDateHeader(date = selectedDate, today = today)
+        if (showDatePicker) {
+            DatePickerSheet(
+                today = today,
+                selected = selectedDate,
+                datesWithData = datesWithData,
+                tz = tz,
+                onDismiss = { showDatePicker = false },
+                onPick = { picked ->
+                    showDatePicker = false
+                    val idx = allDates.indexOf(picked)
+                    if (idx >= 0) scope.launch { pagerState.animateScrollToPage(idx) }
+                },
+            )
+        }
         Spacer(Modifier.height(8.dp))
         FilterChipsRow(
             selected = selectedFilters.value,
@@ -169,7 +202,7 @@ fun FeedScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { pageIdx ->
-            val pageDate = weekDates[pageIdx]
+            val pageDate = allDates.getOrElse(pageIdx) { today }
             val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id) {
                 val all = mealsByDate[pageDate].orEmpty()
                     .filter { mealMatchesDietaryFilters(it, selectedFilters.value) }
@@ -243,11 +276,7 @@ private fun FeedMealCard(
     val key = enriched.cleanTitle.ifBlank { md.meals?.title ?: md.mealId }
     val isFav = favoriteIds.containsFavorite(key) || favoriteIds.containsFavorite(md.meals?.title ?: "")
     val info = state.selectedInfo()
-    val resolved = PriceResolver.resolve(
-        mealCategory = md.category,
-        dbPrices = state.canteenPrices.value,
-        fallbacks = info?.fallbackPrices.orEmpty(),
-    )
+    val resolved = PriceResolver.forMealDate(md, info)
     val priceText = resolved?.textFor(userRole)?.takeIf { it.isNotBlank() }
     MealCard(
         mealDate = md,
@@ -271,6 +300,7 @@ private fun TopBar(
     onCanteenClick: () -> Unit,
     onSearchClick: () -> Unit,
     onNotificationClick: () -> Unit,
+    onCalendarClick: () -> Unit,
     unreadDot: Boolean,
 ) {
     val palette = MensaTheme.palette
@@ -316,6 +346,12 @@ private fun TopBar(
                 Icon(Icons.Filled.Search, null, tint = palette.forest, modifier = Modifier.size(20.dp))
             }
             Box(
+                modifier = Modifier.size(40.dp).clickable { onCalendarClick() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.CalendarMonth, null, tint = palette.forest, modifier = Modifier.size(20.dp))
+            }
+            Box(
                 modifier = Modifier.size(40.dp).clickable { onNotificationClick() },
                 contentAlignment = Alignment.Center,
             ) {
@@ -337,14 +373,18 @@ private fun TopBar(
 
 @Composable
 private fun StatusRow(
-    canteenInfo: com.lkaesberg.mensaapp.data.CanteenInfo?,
+    state: MealsAppState,
+    canteen: Canteen?,
     mealCount: Int,
 ) {
     val palette = MensaTheme.palette
-    val isOpen = canteenInfo?.let { CanteenStaticData.openNow(it) } ?: false
-    val closesAt = canteenInfo?.let { CanteenStaticData.closesAt(it) }
-    val statusText = if (isOpen && closesAt != null) "Geöffnet · bis $closesAt" else "Geschlossen"
+    val occupancyMap by state.occupancy.collectAsState()
+    val isOpen = canteen?.let { state.openNow(it) } ?: false
+    val closesAt = canteen?.let { state.closesAt(it) }
+    val s = com.lkaesberg.mensaapp.i18n.LocalStrings.current
+    val statusText = if (isOpen && closesAt != null) s.openUntil(closesAt) else s.closedLabel
     val statusColor = if (isOpen) palette.open else palette.closed
+    val occupancy = canteen?.id?.let { occupancyMap[it] }
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -361,7 +401,12 @@ private fun StatusRow(
         )
         if (mealCount > 0) {
             Text("·", color = palette.sub.copy(alpha = 0.5f), fontSize = 12.sp)
-            Text("$mealCount Gerichte", color = palette.sub, fontSize = 12.sp)
+            Text(s.dishesCount(mealCount), color = palette.sub, fontSize = 12.sp)
+        }
+        if (canteen != null && isOpen) {
+            Box(modifier = Modifier.padding(start = 4.dp)) {
+                OccupancyChip(occupancy = occupancy, isOpen = true)
+            }
         }
     }
 }
@@ -375,7 +420,7 @@ private fun DateStrip(
     favoriteIds: Set<String>,
     onSelect: (LocalDate) -> Unit,
 ) {
-    val labels = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+    val labels = com.lkaesberg.mensaapp.i18n.LocalStrings.current.weekdaysShort
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -396,6 +441,92 @@ private fun DateStrip(
                 onClick = { onSelect(d) },
             )
         }
+    }
+}
+
+@Composable
+private fun SelectedDateHeader(date: LocalDate, today: LocalDate) {
+    val palette = MensaTheme.palette
+    val s = com.lkaesberg.mensaapp.i18n.LocalStrings.current
+    val diff = (date.toEpochDays() - today.toEpochDays()).toInt()
+    val weekday = s.weekdaysLong.getOrElse((date.dayOfWeek.isoDayNumber - 1).coerceIn(0, 6)) { "" }
+    val month = s.monthsShort.getOrElse((date.monthNumber - 1).coerceIn(0, 11)) { "" }
+    val dayLine = "$weekday, ${date.dayOfMonth}. $month ${date.year}"
+    val prefix = when (diff) {
+        0 -> s.today
+        1 -> s.tomorrow
+        -1 -> s.yesterday
+        else -> null
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (prefix != null) {
+            Text(
+                text = prefix.uppercase(),
+                color = palette.forestDark,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp,
+            )
+            Text("·", color = palette.sub.copy(alpha = 0.5f), fontSize = 11.sp)
+        }
+        Text(
+            text = dayLine,
+            color = palette.ink,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.2).sp,
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerSheet(
+    today: LocalDate,
+    selected: LocalDate,
+    datesWithData: Set<LocalDate>,
+    tz: TimeZone,
+    onDismiss: () -> Unit,
+    onPick: (LocalDate) -> Unit,
+) {
+    // Convert "available data" dates to UTC midnight epoch millis — Material's
+    // DatePicker compares by UTC midnight. We use the system TZ for display.
+    val allowedMillis = remember(datesWithData) {
+        datesWithData.map {
+            it.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+        }.toSet()
+    }
+    val initialMillis = remember(selected) {
+        selected.atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+    }
+    val state = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = initialMillis,
+        selectableDates = object : androidx.compose.material3.SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                utcTimeMillis in allowedMillis
+            override fun isSelectableYear(year: Int): Boolean = true
+        },
+    )
+    val s = com.lkaesberg.mensaapp.i18n.LocalStrings.current
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val millis = state.selectedDateMillis ?: return@TextButton
+                val picked = kotlinx.datetime.Instant.fromEpochMilliseconds(millis)
+                    .toLocalDateTime(TimeZone.UTC).date
+                onPick(picked)
+            }) { Text("OK") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text(s.back) }
+        },
+    ) {
+        androidx.compose.material3.DatePicker(state = state)
     }
 }
 

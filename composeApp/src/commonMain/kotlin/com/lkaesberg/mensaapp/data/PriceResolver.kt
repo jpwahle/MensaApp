@@ -1,6 +1,7 @@
 package com.lkaesberg.mensaapp.data
 
 import com.lkaesberg.mensaapp.CanteenPrice
+import com.lkaesberg.mensaapp.MealDate
 
 /**
  * Resolves a Studi-Preis for a given meal category.
@@ -23,9 +24,52 @@ data class ResolvedPrice(val students: String, val employees: String, val guests
         UserRole.Bedienstet -> employeeText
         UserRole.Gast -> guestText
     }
+
+    companion object {
+        /**
+         * Defensive cleanup for rows scraped before the upstream fix shipped:
+         * strip "Euro"/"€" suffixes and turn unavailable markers ("---", "—")
+         * into empty strings so the UI can render a placeholder instead.
+         */
+        internal fun sanitize(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            val cleaned = raw
+                .replace(' ', ' ')
+                .replace("€", "")
+                .replace(Regex("(?i)\\bEuro\\b"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (cleaned.isEmpty()) return ""
+            if (Regex("^[-–—\\s]+$").matches(cleaned)) return ""
+            return cleaned
+        }
+    }
 }
 
 object PriceResolver {
+
+    /**
+     * Per-dish prices live on `meal_dates` as of the 2026-05-05 API
+     * migration — the official endpoint attaches three role-prices to
+     * every dish. This is strictly better than the historical fuzzy match
+     * against `canteen_prices`. Falls back to canteen-level constants for
+     * the rare canteens (HAWK fallback) without per-dish data.
+     */
+    fun forMealDate(md: MealDate, info: CanteenInfo?): ResolvedPrice? {
+        if (!md.priceStudents.isNullOrBlank() ||
+            !md.priceEmployees.isNullOrBlank() ||
+            !md.priceGuests.isNullOrBlank()) {
+            return ResolvedPrice(
+                students = ResolvedPrice.sanitize(md.priceStudents),
+                employees = ResolvedPrice.sanitize(md.priceEmployees),
+                guests = ResolvedPrice.sanitize(md.priceGuests),
+            )
+        }
+        val target = md.category.lowercase().trim()
+        return info?.fallbackPrices
+            ?.firstOrNull { matches(it.category, target) }
+            ?.let { ResolvedPrice(it.students, it.employees, it.guests) }
+    }
 
     fun resolve(
         mealCategory: String,
@@ -37,9 +81,9 @@ object PriceResolver {
 
         dbPrices.firstOrNull { matches(it.category, target) }?.let { row ->
             return ResolvedPrice(
-                students = row.priceStudents.orEmpty(),
-                employees = row.priceEmployees.orEmpty(),
-                guests = row.priceGuests.orEmpty(),
+                students = ResolvedPrice.sanitize(row.priceStudents),
+                employees = ResolvedPrice.sanitize(row.priceEmployees),
+                guests = ResolvedPrice.sanitize(row.priceGuests),
             )
         }
         fallbacks.firstOrNull { matches(it.category, target) }?.let { row ->
@@ -54,9 +98,9 @@ object PriceResolver {
         // Teppan Yaki, NDS-Menü etc. typically cost the same).
         dbPrices.firstOrNull { "menü" in it.category.lowercase() }?.let { row ->
             return ResolvedPrice(
-                students = row.priceStudents.orEmpty(),
-                employees = row.priceEmployees.orEmpty(),
-                guests = row.priceGuests.orEmpty(),
+                students = ResolvedPrice.sanitize(row.priceStudents),
+                employees = ResolvedPrice.sanitize(row.priceEmployees),
+                guests = ResolvedPrice.sanitize(row.priceGuests),
             )
         }
         fallbacks.firstOrNull { "menü" in it.category.lowercase() }?.let { row ->
@@ -65,9 +109,9 @@ object PriceResolver {
         // Last-ditch: any first non-blank price.
         dbPrices.firstOrNull { !it.priceStudents.isNullOrBlank() }?.let { row ->
             return ResolvedPrice(
-                students = row.priceStudents.orEmpty(),
-                employees = row.priceEmployees.orEmpty(),
-                guests = row.priceGuests.orEmpty(),
+                students = ResolvedPrice.sanitize(row.priceStudents),
+                employees = ResolvedPrice.sanitize(row.priceEmployees),
+                guests = ResolvedPrice.sanitize(row.priceGuests),
             )
         }
         return fallbacks.firstOrNull { it.students.isNotBlank() }?.let {

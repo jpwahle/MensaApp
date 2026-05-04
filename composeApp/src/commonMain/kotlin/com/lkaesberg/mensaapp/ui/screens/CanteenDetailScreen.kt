@@ -45,10 +45,12 @@ import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.data.CanteenInfo
 import com.lkaesberg.mensaapp.data.CanteenStaticData
 import com.lkaesberg.mensaapp.data.MealEnrichment
+import com.lkaesberg.mensaapp.data.ResolvedPrice
 import com.lkaesberg.mensaapp.data.UserRole
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.MonoNumericStyle
 import com.lkaesberg.mensaapp.ui.components.Eyebrow
+import com.lkaesberg.mensaapp.ui.components.OccupancyChip
 import com.lkaesberg.mensaapp.ui.components.Plate
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -66,6 +68,7 @@ fun CanteenDetailScreen(
     val prices by state.canteenPrices.collectAsState()
     val mealsByDate by state.mealsByDate.collectAsState()
     val userRole by state.userRole.collectAsState()
+    val occupancyMap by state.occupancy.collectAsState()
 
     val canteen = remember(info, canteens) {
         canteens.firstOrNull {
@@ -75,7 +78,7 @@ fun CanteenDetailScreen(
     }
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val todaysMeals = mealsByDate[today].orEmpty().take(3)
-    val isOpen = info?.let { CanteenStaticData.openNow(it) } ?: false
+    val isOpen = canteen?.let { state.openNow(it) } ?: false
 
     if (info == null) {
         Box(modifier = Modifier.fillMaxSize().background(palette.paper), contentAlignment = Alignment.Center) {
@@ -159,9 +162,26 @@ fun CanteenDetailScreen(
             ) {
                 StatusCell("STATUS", if (isOpen) "Offen" else "Geschlossen", if (isOpen) palette.open else palette.closed, dot = true)
                 CellDivider()
-                StatusCell("SCHLIESST", CanteenStaticData.closesAt(info) ?: "—", palette.ink)
+                StatusCell("SCHLIESST", canteen?.let { state.closesAt(it) } ?: "—", palette.ink)
                 CellDivider()
                 StatusCell("HEUTE", "${todaysMeals.size} Gerichte", palette.forestDark)
+            }
+        }
+        // Live "Auslastung" snapshot from /api/frequenz. Only shown while
+        // the canteen is open — values are stale outside opening hours.
+        canteen?.id?.let { canteenId ->
+            val occupancy = occupancyMap[canteenId]
+            if (isOpen) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        OccupancyChip(occupancy = occupancy, isOpen = true)
+                    }
+                }
             }
         }
         item {
@@ -198,7 +218,15 @@ fun CanteenDetailScreen(
             // Prices
             val displayPrices = if (prices.isNotEmpty()) {
                 prices.map {
-                    Triple(it.category, listOf(it.priceStudents.orEmpty(), it.priceEmployees.orEmpty(), it.priceGuests.orEmpty()), false)
+                    Triple(
+                        it.category,
+                        listOf(
+                            ResolvedPrice.sanitize(it.priceStudents),
+                            ResolvedPrice.sanitize(it.priceEmployees),
+                            ResolvedPrice.sanitize(it.priceGuests),
+                        ),
+                        false,
+                    )
                 }
             } else {
                 info.fallbackPrices.map { Triple(it.category, listOf(it.students, it.employees, it.guests), true) }
@@ -242,9 +270,10 @@ fun CanteenDetailScreen(
                                 modifier = Modifier.weight(1.4f),
                             )
                             vals.forEachIndexed { idx, v ->
-                                val isActive = idx == userRole.priceColumnIndex
+                                val isActive = idx == userRole.priceColumnIndex && v.isNotBlank()
+                                val display = if (v.isBlank()) "—" else "$v €"
                                 Text(
-                                    text = v,
+                                    text = display,
                                     color = if (isActive) palette.forestDark else palette.sub,
                                     fontSize = 12.sp,
                                     fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,

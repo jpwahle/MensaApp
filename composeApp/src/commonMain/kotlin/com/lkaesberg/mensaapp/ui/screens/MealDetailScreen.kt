@@ -53,6 +53,10 @@ import com.lkaesberg.mensaapp.containsFavorite
 import com.lkaesberg.mensaapp.data.MealEnrichment
 import com.lkaesberg.mensaapp.data.PriceResolver
 import com.lkaesberg.mensaapp.data.UserRole
+import com.lkaesberg.mensaapp.i18n.LocalAppLocale
+import com.lkaesberg.mensaapp.i18n.LocalStrings
+import com.lkaesberg.mensaapp.i18n.sidesFor
+import com.lkaesberg.mensaapp.i18n.titleFor
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.MonoNumericStyle
 import com.lkaesberg.mensaapp.ui.components.AllergenChips
@@ -101,12 +105,9 @@ fun MealDetailScreen(
     val enriched = remember(target.id) { MealEnrichment.enrich(target) }
     val key = enriched.cleanTitle.ifBlank { target.meals?.title ?: target.mealId }
     val isFav = favoriteIds.containsFavorite(key) || favoriteIds.containsFavorite(target.meals?.title ?: "")
-    val priceTriple = remember(target.id, state.canteenPrices.value, canteenInfo?.slug) {
-        PriceResolver.resolve(
-            mealCategory = target.category,
-            dbPrices = state.canteenPrices.value,
-            fallbacks = canteenInfo?.fallbackPrices.orEmpty(),
-        )?.let { Triple(it.students, it.employees, it.guests) }
+    val priceTriple = remember(target.id, target.priceStudents, target.priceEmployees, target.priceGuests, canteenInfo?.slug) {
+        PriceResolver.forMealDate(target, canteenInfo)
+            ?.let { Triple(it.students, it.employees, it.guests) }
     }
 
     val baseHeroHeight = 320.dp
@@ -230,8 +231,10 @@ fun MealDetailScreen(
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(8.dp))
+                val locale = LocalAppLocale.current
                 Text(
-                    text = enriched.cleanTitle.ifBlank { target.meals?.title.orEmpty() },
+                    text = target.meals?.titleFor(locale)?.takeIf { it.isNotBlank() }
+                        ?: enriched.cleanTitle.ifBlank { target.meals?.title.orEmpty() },
                     color = palette.ink,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -265,7 +268,9 @@ fun MealDetailScreen(
                             modifier = Modifier.size(13.dp),
                         )
                         Text(
-                            text = "Zuletzt serviert ${relativeAgo(today, lastServed)}",
+                            text = (if (LocalAppLocale.current == com.lkaesberg.mensaapp.data.Locale.De)
+                                "Zuletzt serviert "
+                            else "Last served ") + relativeAgo(today, lastServed),
                             color = palette.sub,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
@@ -296,18 +301,23 @@ fun MealDetailScreen(
                 }
             }
         }
-        if (enriched.sides.isNotEmpty()) {
-            item {
+        // Sides — locale-aware (English variants from <essen2_eng>, with
+        // German fallback) and falling back to the enrichment-derived list
+        // for legacy rows where structured sides aren't populated.
+        item {
+            val locale = LocalAppLocale.current
+            val sidesList = (target.meals?.sidesFor(locale).orEmpty()).ifEmpty { enriched.sides }
+            if (sidesList.isNotEmpty()) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 22.dp)) {
                     Text(
-                        text = "BEILAGEN",
+                        text = LocalStrings.current.sides,
                         color = palette.sub,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp,
                     )
                     Spacer(Modifier.height(8.dp))
-                    enriched.sides.forEachIndexed { i, s ->
+                    sidesList.forEachIndexed { i, s ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -316,7 +326,7 @@ fun MealDetailScreen(
                             Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(palette.forest))
                             Text(s, color = palette.ink, fontSize = 14.sp)
                         }
-                        if (i < enriched.sides.size - 1) {
+                        if (i < sidesList.size - 1) {
                             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(palette.hair))
                         }
                     }
@@ -335,7 +345,7 @@ fun MealDetailScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "PREIS",
+                        text = LocalStrings.current.price,
                         color = palette.sub,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -356,7 +366,7 @@ fun MealDetailScreen(
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(
-                        text = "ALLERGENE & ZUSATZSTOFFE",
+                        text = LocalStrings.current.allergens,
                         color = palette.sub,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -413,6 +423,8 @@ fun MealDetailScreen(
 
 @Composable
 private fun PriceCell(label: String, value: String, highlight: Boolean, palette: com.lkaesberg.mensaapp.ui.MensaPalette) {
+    val display = if (value.isBlank()) "—" else "$value €"
+    val available = value.isNotBlank()
     Column(
         modifier = Modifier.padding(horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -420,9 +432,9 @@ private fun PriceCell(label: String, value: String, highlight: Boolean, palette:
         Text(label, color = palette.sub, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "$value €",
-            color = if (highlight) palette.forestDark else palette.sub,
-            fontSize = if (highlight) 22.sp else 18.sp,
+            text = display,
+            color = if (highlight && available) palette.forestDark else palette.sub,
+            fontSize = if (highlight && available) 22.sp else 18.sp,
             fontWeight = FontWeight.ExtraBold,
             style = MonoNumericStyle,
         )

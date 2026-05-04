@@ -318,7 +318,23 @@ interface PriceRow {
   guestsCents: number | null;
 }
 
-// "3,95 Euro" → 395; "3,95 / 4,95 Euro" → 395 (first); "---" → null
+// Cleans a raw price cell: strips "Euro"/"€" suffixes, normalises whitespace,
+// and collapses unavailable markers ("---", "—", "–", empty) to null. Ranges
+// like "3,95 / 4,95" are preserved verbatim so the UI can show them as-is.
+function normalizePriceText(s: string | null | undefined): string | null {
+  if (s == null) return null;
+  const cleaned = s
+    .replace(/ /g, ' ')
+    .replace(/€/g, '')
+    .replace(/\bEuro\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return null;
+  if (/^[-–—\s]+$/.test(cleaned)) return null;
+  return cleaned;
+}
+
+// "3,95" → 395; "3,95 / 4,95" → 395 (first); null → null
 function parseEuroCents(s: string | null | undefined): number | null {
   if (!s) return null;
   const m = /(-?\d+),(\d{2})/.exec(s);
@@ -349,14 +365,17 @@ function parsePriceHtml(html: string): PriceRow[] {
       if (cells.length < 4) continue;
       const [category, students, employees, guests] = cells.slice(-4);
       if (!category || category.toLowerCase() === 'studierende') continue;
+      const cleanStudents = normalizePriceText(students);
+      const cleanEmployees = normalizePriceText(employees);
+      const cleanGuests = normalizePriceText(guests);
       rows.push({
         category,
-        rawStudents: students || null,
-        rawEmployees: employees || null,
-        rawGuests: guests || null,
-        studentsCents: parseEuroCents(students),
-        employeesCents: parseEuroCents(employees),
-        guestsCents: parseEuroCents(guests),
+        rawStudents: cleanStudents,
+        rawEmployees: cleanEmployees,
+        rawGuests: cleanGuests,
+        studentsCents: parseEuroCents(cleanStudents),
+        employeesCents: parseEuroCents(cleanEmployees),
+        guestsCents: parseEuroCents(cleanGuests),
       });
     }
   }

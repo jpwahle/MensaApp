@@ -39,7 +39,16 @@ class MealsRepository(private val postgrest: Postgrest) {
         // those rows. They should still appear in the feed (greyed out via
         // MealCard's deactivatedAt handling) instead of vanishing. Past and
         // future deactivations stay filtered.
-        raw.filter { it.deactivatedAt == null || LocalDate.parse(it.servedOn) == today }
+        //
+        // Drop empty-title rows entirely — they're "Last Minute" placeholders
+        // the API returns for unfilled category slots. The new scraper skips
+        // them at parse time, but legacy rows linger in DB and surface as
+        // weird greyed-out blank cards otherwise.
+        raw.filter { md ->
+            val isActiveOrToday = md.deactivatedAt == null || LocalDate.parse(md.servedOn) == today
+            val title = md.meals?.cleanTitle?.ifBlank { null } ?: md.meals?.title
+            isActiveOrToday && !title.isNullOrBlank()
+        }
             .groupBy { LocalDate.parse(it.servedOn) }
             .mapValues { entry ->
                 entry.value.sortedBy { it.category.lowercase() }
@@ -83,6 +92,29 @@ class MealsRepository(private val postgrest: Postgrest) {
         }.decodeList<CanteenPrice>()
     } catch (e: Throwable) {
         println("Error fetching prices for canteen $canteenId: ${e.message}")
+        emptyList()
+    }
+
+    /**
+     * Weekly opening-hours pattern, populated by the 2026-05-05 API
+     * migration. One row per (canteen, ISO weekday). Open/close times are
+     * null on closed days. Empty list when the migration hasn't run.
+     */
+    suspend fun getCanteenHours(): List<CanteenHours> = try {
+        postgrest["canteen_hours"].select().decodeList<CanteenHours>()
+    } catch (e: Throwable) {
+        println("Error fetching canteen hours: ${e.message}")
+        emptyList()
+    }
+
+    /**
+     * Latest occupancy snapshot per canteen from the `canteen_occupancy_latest`
+     * view. Empty list outside opening hours or before the first sync.
+     */
+    suspend fun getOccupancyLatest(): List<CanteenOccupancy> = try {
+        postgrest["canteen_occupancy_latest"].select().decodeList<CanteenOccupancy>()
+    } catch (e: Throwable) {
+        println("Error fetching occupancy: ${e.message}")
         emptyList()
     }
 }
