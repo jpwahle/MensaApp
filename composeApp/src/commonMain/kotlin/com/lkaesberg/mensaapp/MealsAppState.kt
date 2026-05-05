@@ -241,6 +241,27 @@ class MealsAppState(
     }
 
     /**
+     * `true` if it's currently before the canteen's opening time today.
+     * Used to suppress the deactivated-meal "greyed out" styling in the
+     * feed: meals that the scraper has marked deactivated for today should
+     * still render at full opacity until the canteen has actually opened —
+     * up to that point the menu is mutable upstream.
+     */
+    fun beforeOpeningToday(canteen: Canteen): Boolean {
+        val now = nowDt()
+        return when (val r = dbHoursForToday(canteen, now.date.dayOfWeek)) {
+            is TodayHours.Open -> now.time < r.open
+            TodayHours.ClosedToday -> false
+            TodayHours.Unknown -> CanteenStaticData.matchFor(canteen.name)
+                ?.let { ci ->
+                    val entry = ci.hours.firstOrNull { now.date.dayOfWeek in it.days }
+                    val open = entry?.openTime
+                    open != null && now.time < open
+                } ?: false
+        }
+    }
+
+    /**
      * Full weekly schedule for a canteen, DB-first with static fallback when
      * `mensa-hours-sync` hasn't populated `canteen_hours` yet. Uses [labels]
      * (locale-aware short weekday names) for the "Mo–Do" labels.

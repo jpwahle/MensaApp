@@ -212,7 +212,12 @@ fun FeedScreen(
             val lunchMeals = pageBuckets.lunch
             val afternoonMeals = pageBuckets.afternoon
             val activeMeals = (lunchMeals + afternoonMeals).distinctBy { it.id }
-            val showAsClosed = pageDate == today && isCanteenPastClosing
+            val isBeforeOpening = selectedCanteen?.let { state.beforeOpeningToday(it) } ?: false
+            // Only treat today as "closed" once the canteen has actually opened
+            // and is now past closing — before opening, the menu is still
+            // mutable upstream so dimming the cards would be misleading.
+            val showAsClosed = pageDate == today && isCanteenPastClosing && !isBeforeOpening
+            val isTodayBeforeOpening = pageDate == today && isBeforeOpening
 
             if (activeMeals.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -238,6 +243,7 @@ fun FeedScreen(
                                 favoriteIds = favoriteIds,
                                 userRole = userRole,
                                 showAsClosed = showAsClosed,
+                                forceActive = isTodayBeforeOpening,
                                 onOpenMealDetail = onOpenMealDetail,
                             )
                         }
@@ -253,6 +259,7 @@ fun FeedScreen(
                                 favoriteIds = favoriteIds,
                                 userRole = userRole,
                                 showAsClosed = showAsClosed,
+                                forceActive = isTodayBeforeOpening,
                                 onOpenMealDetail = onOpenMealDetail,
                             )
                         }
@@ -270,6 +277,7 @@ private fun FeedMealCard(
     favoriteIds: Set<String>,
     userRole: com.lkaesberg.mensaapp.data.UserRole,
     showAsClosed: Boolean,
+    forceActive: Boolean = false,
     onOpenMealDetail: (MealDate) -> Unit,
 ) {
     val enriched = remember(md.id) { MealEnrichment.enrich(md) }
@@ -290,6 +298,7 @@ private fun FeedMealCard(
         favoriteHint = null,
         enriched = enriched,
         forceDeactivated = showAsClosed,
+        forceActive = forceActive,
     )
 }
 

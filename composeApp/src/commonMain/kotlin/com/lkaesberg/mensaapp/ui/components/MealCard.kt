@@ -59,9 +59,16 @@ fun MealCard(
     enriched: EnrichedMeal = MealEnrichment.enrich(mealDate),
     /** Force the card into the deactivated visual state (e.g. canteen past closing). */
     forceDeactivated: Boolean = false,
+    /**
+     * Override that wins over both [forceDeactivated] and the row's own
+     * `deactivated_at`. Used when today's canteen hasn't opened yet — the
+     * scraper may have already deactivated some rows, but the menu can
+     * still change upstream, so dimming them now is misleading.
+     */
+    forceActive: Boolean = false,
 ) {
     val palette = MensaTheme.palette
-    val isDeactivated = mealDate.deactivatedAt != null || forceDeactivated
+    val isDeactivated = !forceActive && (mealDate.deactivatedAt != null || forceDeactivated)
     val s = LocalStrings.current
     val locale = LocalAppLocale.current
     val titleText = mealDate.meals?.titleFor(locale)?.takeIf { it.isNotBlank() }
