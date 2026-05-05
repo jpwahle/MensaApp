@@ -67,10 +67,19 @@ class MealsRepository(private val postgrest: Postgrest) {
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
         val since = today.minus(sinceDays, DateTimeUnit.DAY)
 
+        // History == *strictly past* offerings. We exclude today and the
+        // future for two reasons: future-scheduled rows (the long-mode
+        // scraper pulls 30+ days ahead) would surface as the most-recent
+        // occurrence; and today's own offerings shouldn't read as "zuletzt:
+        // heute" everywhere — that's not history, it's now. The user is
+        // looking at the archive for historical context, and "zuletzt vor
+        // 2 Wochen" is the useful signal even if the dish happens to also
+        // be on today's plan.
         val raw = postgrest["meal_dates"].select(columns = Columns.raw("*,meals(*)")) {
             filter {
                 eq("canteen_id", canteenId)
                 gte("served_on", since.toString())
+                lt("served_on", today.toString())
             }
             order("served_on", Order.DESCENDING)
         }.decodeList<MealDate>()

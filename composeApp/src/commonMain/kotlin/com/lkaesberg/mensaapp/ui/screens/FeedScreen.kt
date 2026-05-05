@@ -198,26 +198,43 @@ fun FeedScreen(
         )
         Spacer(Modifier.height(4.dp))
 
+        // Subscribe so hours loading triggers recomposition of the page below.
+        val canteenHoursMap by state.canteenHours.collectAsState()
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { pageIdx ->
             val pageDate = allDates.getOrElse(pageIdx) { today }
-            val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id) {
+            val isBeforeOpening = selectedCanteen?.let { state.beforeOpeningToday(it) } ?: false
+            val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id, isBeforeOpening, canteenHoursMap) {
                 val all = mealsByDate[pageDate].orEmpty()
                     .filter { mealMatchesDietaryFilters(it, selectedFilters.value) }
+                    .filter { md ->
+                        // Hide DB-deactivated rows on today *before the canteen
+                        // opens*. The scraper deactivates rows when an upstream
+                        // refresh stops listing them; before service starts the
+                        // upstream menu is still mutable, so showing those rows
+                        // (even greyed) is noise. After opening, they stay
+                        // visible (greyed) as a "what was on offer today" hint.
+                        !(pageDate == today && md.deactivatedAt != null && isBeforeOpening)
+                    }
                 val hideAfternoon = shouldHideAfternoonMealsForCanteenOnDate(selectedCanteen, all)
                 separateMealsByPeriod(all, hideAfternoon)
             }
             val lunchMeals = pageBuckets.lunch
             val afternoonMeals = pageBuckets.afternoon
             val activeMeals = (lunchMeals + afternoonMeals).distinctBy { it.id }
-            val isBeforeOpening = selectedCanteen?.let { state.beforeOpeningToday(it) } ?: false
             // Only treat today as "closed" once the canteen has actually opened
             // and is now past closing — before opening, the menu is still
             // mutable upstream so dimming the cards would be misleading.
             val showAsClosed = pageDate == today && isCanteenPastClosing && !isBeforeOpening
-            val isTodayBeforeOpening = pageDate == today && isBeforeOpening
+            // While the canteen is open today, force every card to render
+            // active even if its `deactivated_at` is set. The scraper's
+            // deactivation pass can race with the upstream's morning publish,
+            // leaving real menu items flagged stale until the next scrape —
+            // dimming them mid-service is misleading. After close we restore
+            // the dimmed-history behaviour.
+            val keepTodayActive = pageDate == today && !isCanteenPastClosing
 
             if (activeMeals.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -243,7 +260,7 @@ fun FeedScreen(
                                 favoriteIds = favoriteIds,
                                 userRole = userRole,
                                 showAsClosed = showAsClosed,
-                                forceActive = isTodayBeforeOpening,
+                                forceActive = keepTodayActive,
                                 onOpenMealDetail = onOpenMealDetail,
                             )
                         }
@@ -259,7 +276,7 @@ fun FeedScreen(
                                 favoriteIds = favoriteIds,
                                 userRole = userRole,
                                 showAsClosed = showAsClosed,
-                                forceActive = isTodayBeforeOpening,
+                                forceActive = keepTodayActive,
                                 onOpenMealDetail = onOpenMealDetail,
                             )
                         }
@@ -394,28 +411,32 @@ private fun StatusRow(
     val statusText = if (isOpen && closesAt != null) s.openUntil(closesAt) else s.closedLabel
     val statusColor = if (isOpen) palette.open else palette.closed
     val occupancy = canteen?.id?.let { occupancyMap[it] }
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 0.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Box(
-            modifier = Modifier.size(6.dp).clip(CircleShape).background(statusColor),
-        )
-        Text(
-            text = statusText,
-            color = palette.sub,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        if (mealCount > 0) {
-            Text("·", color = palette.sub.copy(alpha = 0.5f), fontSize = 12.sp)
-            Text(s.dishesCount(mealCount), color = palette.sub, fontSize = 12.sp)
-        }
-        if (canteen != null && isOpen) {
-            Box(modifier = Modifier.padding(start = 4.dp)) {
-                OccupancyChip(occupancy = occupancy, isOpen = true)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier.size(6.dp).clip(CircleShape).background(statusColor),
+            )
+            Text(
+                text = statusText,
+                color = palette.sub,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            if (mealCount > 0) {
+                Text("·", color = palette.sub.copy(alpha = 0.5f), fontSize = 12.sp)
+                Text(s.dishesCount(mealCount), color = palette.sub, fontSize = 12.sp)
             }
+        }
+        // Occupancy text gets its own line so the long German "Heute weniger
+        // los als sonst" label doesn't wrap inside a constrained Row.
+        if (canteen != null && isOpen && occupancy != null) {
+            OccupancyChip(occupancy = occupancy, isOpen = true)
         }
     }
 }

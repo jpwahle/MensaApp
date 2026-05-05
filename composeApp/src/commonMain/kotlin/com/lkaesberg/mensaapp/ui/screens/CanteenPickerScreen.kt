@@ -41,9 +41,12 @@ import com.lkaesberg.mensaapp.i18n.LocalStrings
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
 import com.lkaesberg.mensaapp.ui.components.OccupancyChip
+import com.lkaesberg.mensaapp.ui.components.OccupancyStats
+import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import androidx.compose.runtime.LaunchedEffect
 
 @Composable
 fun CanteenPickerScreen(
@@ -60,6 +63,18 @@ fun CanteenPickerScreen(
 
     val visibleCanteens = canteens.filter { it.id !in disabledCanteenIds }
     val occupancyMap by state.occupancy.collectAsState()
+
+    // Auto-refresh hours + occupancy while the picker is on-screen. The
+    // initial fetch happens immediately (covers stale data when re-entering
+    // the screen); subsequent refreshes every 60 s catch the upstream's
+    // ~minute-resolution sales counter ticks. Cancels automatically when
+    // the screen leaves composition.
+    LaunchedEffect(Unit) {
+        while (true) {
+            state.refreshHoursAndOccupancy(scope)
+            delay(60_000)
+        }
+    }
     val s = com.lkaesberg.mensaapp.i18n.LocalStrings.current
     Column(modifier = Modifier.fillMaxSize().background(palette.paper)) {
         MTopBar(
@@ -158,6 +173,16 @@ fun CanteenPickerScreen(
                                     isOpen = true,
                                 )
                             }
+                        }
+                        // For the *active* canteen, expose the raw counter
+                        // breakdown from /api/frequenz so users can see how
+                        // today's footfall compares to typical. Other canteens
+                        // get just the chip above; the full table here would
+                        // be too noisy in a list of 4+.
+                        val occHere = occupancyMap[canteen.id]
+                        if (isActive && isOpen && occHere != null) {
+                            Spacer(Modifier.height(8.dp))
+                            OccupancyStats(occupancy = occHere)
                         }
                         // Active canteen → full week schedule (DB-driven with
                         // a static fallback). Other canteens → just today's

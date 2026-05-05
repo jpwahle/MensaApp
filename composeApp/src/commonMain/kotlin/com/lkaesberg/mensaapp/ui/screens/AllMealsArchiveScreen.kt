@@ -62,23 +62,38 @@ fun AllMealsArchiveScreen(
     val canteen by state.selectedCanteen.collectAsState()
     var query by remember { mutableStateOf("") }
 
-    LaunchedEffect(canteen?.id) {
+    // Fire on first composition AND on canteen change. The stable Unit key
+    // also forces a reload every time we re-enter the archive after a
+    // screen change — `state.history` is shared with FavoritesScreen and
+    // DishStatsScreen which use a 90-day window, and we want the archive
+    // to always start with the full 365-day data set.
+    LaunchedEffect(canteen?.id, Unit) {
         if (canteen != null) state.loadHistoryForSelected(scope, sinceDays = 365)
     }
 
     val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
 
-    val byTitle = remember(history) {
-        history.groupBy { it.meals?.cleanTitle ?: it.meals?.title.orEmpty() }
+    // Defensive past-only filter at the screen level too. The repo already
+    // filters `served_on < today`, but if state.history is stale from another
+    // screen with a wider window, we'd otherwise count today/future
+    // occurrences in this aggregation.
+    val pastHistory = remember(history, today) {
+        history.mapNotNull { md ->
+            val date = runCatching { LocalDate.parse(md.servedOn) }.getOrNull() ?: return@mapNotNull null
+            if (date.toEpochDays() < today.toEpochDays()) md to date else null
+        }
+    }
+    val byTitle = remember(pastHistory) {
+        pastHistory.groupBy { (md, _) -> md.meals?.cleanTitle ?: md.meals?.title.orEmpty() }
             .filter { it.key.isNotBlank() }
-            .map { (title, dates) ->
-                val mostRecent = dates.maxByOrNull { LocalDate.parse(it.servedOn) }
-                val md = mostRecent ?: dates.first()
+            .map { (title, pairs) ->
+                val mostRecent = pairs.maxByOrNull { (_, d) -> d.toEpochDays() }
+                val (md, mostRecentDate) = mostRecent ?: pairs.first()
                 ArchiveItem(
                     title = title,
                     icons = md.meals?.icons.orEmpty(),
-                    times = dates.size,
-                    lastDate = mostRecent?.servedOn?.let { LocalDate.parse(it) },
+                    times = pairs.size,
+                    lastDate = mostRecentDate,
                     md = md,
                 )
             }
@@ -144,26 +159,7 @@ fun AllMealsArchiveScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (query.isBlank()) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("ZULETZT GESUCHT", color = palette.sub, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Schnitzel", "Curry", "Spätzle", "Vegan").forEach { t ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(100.dp))
-                                .background(palette.moss)
-                                .border(1.dp, palette.hair, RoundedCornerShape(100.dp))
-                                .clickable { query = t }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                        ) {
-                            Text("↺ $t", color = palette.forestDark, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-        } else {
+        if (query.isNotBlank()) {
             Text(
                 text = "${filtered.size} TREFFER · IM GESAMTEN ARCHIV",
                 color = palette.sub,
@@ -255,7 +251,8 @@ private data class ArchiveItem(
 internal fun relativeAgo(today: LocalDate, target: LocalDate): String {
     val diff = (today.toEpochDays() - target.toEpochDays()).toInt()
     return when {
-        diff <= 0 -> "heute"
+        diff < 0 -> "demnächst"  // future — shouldn't happen for past-only history but safe
+        diff == 0 -> "heute"
         diff == 1 -> "gestern"
         diff < 7 -> "vor $diff Tagen"
         diff < 14 -> "vor 1 Woche"

@@ -3,9 +3,14 @@ package com.lkaesberg.mensaapp.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -37,30 +42,29 @@ fun OccupancyChip(
     isOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!isOpen) return
+    if (!isOpen || occupancy == null) return
     val palette = MensaTheme.palette
     val s = LocalStrings.current
-    val color = occupancy?.color?.let { parseHexColor(it) } ?: Color(0xFF999999)
-    val label = when {
-        occupancy?.statusKey == "schwacher_als_sonst" -> s.occupancyWeaker
-        occupancy?.statusKey == "starker_als_sonst" -> s.occupancyStronger
-        occupancy != null -> s.occupancyHere
-        else -> s.occupancyNoData
+    val color = parseHexColor(occupancy.color ?: "") ?: palette.sub
+    val label = when (occupancy.statusKey) {
+        "schwacher_als_sonst" -> s.occupancyWeaker
+        "starker_als_sonst" -> s.occupancyStronger
+        else -> s.occupancyHere
     }
+    // Flat, inline-style row that visually matches the StatusRow's other
+    // text (small dot + label). No background pill — keeps the header from
+    // feeling like a stack of distinct widgets.
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(palette.surface)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+        Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
         Text(
             text = label,
             color = palette.sub,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
@@ -72,4 +76,74 @@ private fun parseHexColor(hex: String): Color? {
         val argb = if (normalised.length == 6) "FF$normalised" else normalised
         Color(argb.toLong(16))
     }.getOrNull()
+}
+
+/**
+ * Three-cell mini stats table — `Aktuell`, `Sonst um diese Zeit`,
+ * `Tagesschnitt` — exposing the raw counters from `/api/frequenz`.
+ * Used on the canteen picker for the currently-active canteen.
+ */
+@Composable
+fun OccupancyStats(
+    occupancy: CanteenOccupancy,
+    modifier: Modifier = Modifier,
+) {
+    val palette = MensaTheme.palette
+    val s = LocalStrings.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(palette.moss)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatCell(s.occupancyNow, formatStat(occupancy.salesCurrent), highlight = true)
+        StatDivider()
+        StatCell(s.occupancyTypical, formatStat(occupancy.salesAvgWeekday), highlight = false)
+        StatDivider()
+        StatCell(s.occupancyDailyAvg, formatStat(occupancy.salesAvgYearly), highlight = false)
+    }
+}
+
+@Composable
+private fun StatCell(label: String, value: String, highlight: Boolean) {
+    val palette = MensaTheme.palette
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    ) {
+        Text(
+            label,
+            color = palette.sub,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            value,
+            color = if (highlight) palette.forestDark else palette.ink,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+    }
+}
+
+@Composable
+private fun StatDivider() {
+    val palette = MensaTheme.palette
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(24.dp)
+            .background(palette.hair),
+    )
+}
+
+private fun formatStat(value: Double?): String {
+    if (value == null) return "—"
+    val rounded = kotlin.math.round(value).toInt()
+    return rounded.toString()
 }

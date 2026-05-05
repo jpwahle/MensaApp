@@ -88,8 +88,14 @@ fun MealDetailScreen(
     val canteenInfo = state.selectedInfo()
     val userRole by state.userRole.collectAsState()
     val scope = rememberCoroutineScope()
-    LaunchedEffect(state.selectedCanteen.value?.id) {
-        if (history.isEmpty()) state.loadHistoryForSelected(scope)
+    val selectedCanteen by state.selectedCanteen.collectAsState()
+    // Force a fresh history load on every entry — the shared `state.history`
+    // can carry stale data from another screen (e.g. AllMealsArchive uses a
+    // 365-day window, so re-entering MealDetail without re-fetching could
+    // surface a "zuletzt" that's older than necessary or, worse, picked up
+    // before the repo's `lt today` filter was applied to the cached set).
+    LaunchedEffect(selectedCanteen?.id, Unit) {
+        if (selectedCanteen != null) state.loadHistoryForSelected(scope)
     }
     val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
 
@@ -241,9 +247,10 @@ fun MealDetailScreen(
                     letterSpacing = (-0.3).sp,
                     lineHeight = 28.sp,
                 )
-                val lastServed = remember(history, target.id, enriched.cleanTitle) {
+                val lastServed = remember(history, target.id, enriched.cleanTitle, today) {
                     val titleKey = enriched.cleanTitle.ifBlank { target.meals?.title ?: "" }
                     val legacy = target.meals?.title ?: ""
+                    val todayEpoch = today.toEpochDays()
                     history.asSequence()
                         .filter { md ->
                             md.id != target.id && run {
@@ -252,8 +259,8 @@ fun MealDetailScreen(
                             }
                         }
                         .mapNotNull { runCatching { LocalDate.parse(it.servedOn) }.getOrNull() }
-                        .filter { it < today }
-                        .maxOrNull()
+                        .filter { it.toEpochDays() < todayEpoch }
+                        .maxByOrNull { it.toEpochDays() }
                 }
                 if (lastServed != null) {
                     Spacer(Modifier.height(8.dp))

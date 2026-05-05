@@ -78,6 +78,9 @@ data class Strings(
     val occupancyStronger: String,
     val occupancyHere: String,
     val occupancyNoData: String,
+    val occupancyNow: String,         // "Aktuell" / "Now"
+    val occupancyTypical: String,     // "Sonst" / "Usual"
+    val occupancyDailyAvg: String,    // "Schnitt" / "Avg"
 
     // Settings
     val settingsPersonGroup: String,
@@ -188,6 +191,9 @@ val StringsDe = Strings(
     occupancyStronger = "Heute mehr los als sonst",
     occupancyHere = "Aktuelle Auslastung",
     occupancyNoData = "Aktuell keine Daten",
+    occupancyNow = "Aktuell",
+    occupancyTypical = "Sonst um diese Zeit",
+    occupancyDailyAvg = "Tagesschnitt",
     settingsPersonGroup = "Personenkreis",
     settingsHighlightedPrice = "Welcher Preis wird hervorgehoben?",
     settingsAppearance = "Erscheinungsbild",
@@ -286,6 +292,9 @@ val StringsEn = Strings(
     occupancyStronger = "Busier than usual right now",
     occupancyHere = "Current footfall",
     occupancyNoData = "No live data",
+    occupancyNow = "Now",
+    occupancyTypical = "Usually now",
+    occupancyDailyAvg = "Daily avg",
     settingsPersonGroup = "Group",
     settingsHighlightedPrice = "Which price is highlighted?",
     settingsAppearance = "Appearance",

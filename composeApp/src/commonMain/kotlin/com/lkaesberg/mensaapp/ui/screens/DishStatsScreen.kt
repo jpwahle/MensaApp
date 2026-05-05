@@ -59,7 +59,10 @@ fun DishStatsScreen(
     val canteen by state.selectedCanteen.collectAsState()
     val favoriteIds by state.favoritesManager.favorites.collectAsState()
 
-    LaunchedEffect(canteen?.id) {
+    // Re-fire on every screen entry so the 90-day window is always fresh,
+    // even if state.history was last populated by another screen with a
+    // different sinceDays.
+    LaunchedEffect(canteen?.id, Unit) {
         if (canteen != null) state.loadHistoryForSelected(scope, sinceDays = 90)
     }
 
@@ -67,18 +70,29 @@ fun DishStatsScreen(
     val sortOptions = listOf("Häufigkeit", "Zuletzt", "A–Z", "Preis")
     var sort by remember { mutableStateOf(sortOptions.first()) }
 
-    val dishes = remember(history) {
-        history.groupBy { it.meals?.cleanTitle ?: it.meals?.title.orEmpty() }
+    // Defensive past-only filter at the screen level. Repo already filters
+    // `served_on < today`; this is belt-and-suspenders against any stale
+    // shared-flow data leaking today/future occurrences into the count
+    // and the "zuletzt" date.
+    val pastHistory = remember(history, today) {
+        history.mapNotNull { md ->
+            val date = runCatching { LocalDate.parse(md.servedOn) }.getOrNull() ?: return@mapNotNull null
+            if (date.toEpochDays() < today.toEpochDays()) md to date else null
+        }
+    }
+    val dishes = remember(pastHistory) {
+        pastHistory.groupBy { (md, _) -> md.meals?.cleanTitle ?: md.meals?.title.orEmpty() }
             .filter { it.key.isNotBlank() }
-            .map { (title, dates) ->
-                val mostRecent = dates.maxByOrNull { LocalDate.parse(it.servedOn) } ?: dates.first()
+            .map { (title, pairs) ->
+                val mostRecent = pairs.maxByOrNull { (_, d) -> d.toEpochDays() } ?: pairs.first()
+                val (md, mostRecentDate) = mostRecent
                 DishStat(
                     title = title,
-                    icons = mostRecent.meals?.icons.orEmpty(),
-                    category = mostRecent.category,
-                    count = dates.size,
-                    lastDate = LocalDate.parse(mostRecent.servedOn),
-                    md = mostRecent,
+                    icons = md.meals?.icons.orEmpty(),
+                    category = md.category,
+                    count = pairs.size,
+                    lastDate = mostRecentDate,
+                    md = md,
                 )
             }
     }
