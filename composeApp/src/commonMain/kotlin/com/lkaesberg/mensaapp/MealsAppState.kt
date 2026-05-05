@@ -192,40 +192,96 @@ class MealsAppState(
         }.getOrNull()
     }
 
-    private fun dbHoursForToday(canteen: Canteen, dow: DayOfWeek): Pair<LocalTime, LocalTime>? {
-        val rows = _canteenHours.value[canteen.id] ?: return null
-        val row = rows.firstOrNull { it.dayOfWeek == dow.isoDayNumber } ?: return null
-        val open = parseDbTime(row.openTime) ?: return null
-        val close = parseDbTime(row.closeTime) ?: return null
-        return open to close
+    private sealed class TodayHours {
+        data class Open(val open: LocalTime, val close: LocalTime) : TodayHours()
+        object ClosedToday : TodayHours()
+        object Unknown : TodayHours()
+    }
+
+    private fun dbHoursForToday(canteen: Canteen, dow: DayOfWeek): TodayHours {
+        val rows = _canteenHours.value[canteen.id] ?: return TodayHours.Unknown
+        val row = rows.firstOrNull { it.dayOfWeek == dow.isoDayNumber }
+            ?: return TodayHours.Unknown
+        val open = parseDbTime(row.openTime)
+        val close = parseDbTime(row.closeTime)
+        // NULL open/close on an existing row = "closed today" per the schema.
+        // Distinct from Unknown (no row at all), where we fall back to static.
+        return if (open != null && close != null) TodayHours.Open(open, close)
+        else TodayHours.ClosedToday
     }
 
     fun openNow(canteen: Canteen): Boolean {
         val now = nowDt()
-        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (open, close) ->
-            return now.time >= open && now.time < close
+        return when (val r = dbHoursForToday(canteen, now.date.dayOfWeek)) {
+            is TodayHours.Open -> now.time >= r.open && now.time < r.close
+            TodayHours.ClosedToday -> false
+            TodayHours.Unknown -> CanteenStaticData.matchFor(canteen.name)
+                ?.let { CanteenStaticData.openNow(it, now) } ?: false
         }
-        // Static fallback: e.g. before mensa-hours-sync has run.
-        return CanteenStaticData.matchFor(canteen.name)
-            ?.let { CanteenStaticData.openNow(it, now) } ?: false
     }
 
     fun pastClosingTime(canteen: Canteen): Boolean {
         val now = nowDt()
-        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (_, close) ->
-            return now.time >= close
+        return when (val r = dbHoursForToday(canteen, now.date.dayOfWeek)) {
+            is TodayHours.Open -> now.time >= r.close
+            TodayHours.ClosedToday -> true   // closed all day → effectively past closing
+            TodayHours.Unknown -> CanteenStaticData.matchFor(canteen.name)
+                ?.let { CanteenStaticData.pastClosingTime(it, now) } ?: true
         }
-        return CanteenStaticData.matchFor(canteen.name)
-            ?.let { CanteenStaticData.pastClosingTime(it, now) } ?: true
     }
 
     fun closesAt(canteen: Canteen): String? {
         val now = nowDt()
-        dbHoursForToday(canteen, now.date.dayOfWeek)?.let { (_, close) ->
-            return "${close.hour.toString().padStart(2, '0')}:${close.minute.toString().padStart(2, '0')}"
+        return when (val r = dbHoursForToday(canteen, now.date.dayOfWeek)) {
+            is TodayHours.Open -> "${r.close.hour.toString().padStart(2, '0')}:${r.close.minute.toString().padStart(2, '0')}"
+            TodayHours.ClosedToday -> null
+            TodayHours.Unknown -> CanteenStaticData.matchFor(canteen.name)
+                ?.let { CanteenStaticData.closesAt(it, now) }
         }
-        return CanteenStaticData.matchFor(canteen.name)
-            ?.let { CanteenStaticData.closesAt(it, now) }
+    }
+
+    /**
+     * Full weekly schedule for a canteen, DB-first with static fallback when
+     * `mensa-hours-sync` hasn't populated `canteen_hours` yet. Uses [labels]
+     * (locale-aware short weekday names) for the "Mo–Do" labels.
+     */
+    fun hoursLinesFor(
+        canteen: Canteen,
+        labels: List<String>,
+        closedLabel: String,
+    ): List<com.lkaesberg.mensaapp.data.HoursLine> {
+        val rows = _canteenHours.value[canteen.id]
+        if (!rows.isNullOrEmpty()) {
+            return com.lkaesberg.mensaapp.data.HoursDisplay.groupAll(rows, labels, closedLabel)
+        }
+        val info = CanteenStaticData.matchFor(canteen.name) ?: return emptyList()
+        return com.lkaesberg.mensaapp.data.HoursDisplay.fromStatic(info.hours)
+    }
+
+    /** One-line view for today; used in the picker for non-active canteens. */
+    fun todayHoursLineFor(
+        canteen: Canteen,
+        labels: List<String>,
+        closedLabel: String,
+    ): com.lkaesberg.mensaapp.data.HoursLine? {
+        val today = nowDt().date.dayOfWeek
+        val rows = _canteenHours.value[canteen.id]
+        if (!rows.isNullOrEmpty()) {
+            return com.lkaesberg.mensaapp.data.HoursDisplay.lineForToday(
+                rows = rows,
+                today = today,
+                weekdayShortLabels = labels,
+                closedLabel = closedLabel,
+            )
+        }
+        // Static fallback: pick the entry whose `days` set covers today.
+        val info = CanteenStaticData.matchFor(canteen.name) ?: return null
+        val match = info.hours.firstOrNull { today in it.days } ?: return null
+        return com.lkaesberg.mensaapp.data.HoursLine(
+            daysLabel = labels[today.ordinal],
+            timeLabel = match.time,
+            days = setOf(today),
+        )
     }
 
     /**

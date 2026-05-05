@@ -277,6 +277,28 @@ fun MealDetailScreen(
                         )
                     }
                 }
+                val ratingAvg = target.meals?.ratingAvg
+                if (ratingAvg != null && ratingAvg > 0f) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = palette.amber,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = com.lkaesberg.mensaapp.ui.components.formatRating(ratingAvg) + " / 5,0",
+                            color = palette.sub,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MonoNumericStyle,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     target.meals?.icons.orEmpty().forEach { kind ->

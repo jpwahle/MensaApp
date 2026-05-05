@@ -142,9 +142,29 @@ fun MealCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    mealDate.meals?.icons.orEmpty().forEach { kind ->
-                        DietPip(kind = kind, size = 18.dp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val rating = mealDate.meals?.ratingAvg
+                    if (rating != null && rating > 0f) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = palette.amber,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = formatRating(rating),
+                                color = palette.sub,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MonoNumericStyle,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        mealDate.meals?.icons.orEmpty().forEach { kind ->
+                            DietPip(kind = kind, size = 18.dp)
+                        }
                     }
                 }
                 if (priceText != null) {
@@ -183,4 +203,15 @@ fun MealCard(
             }
         }
     }
+}
+
+// "4,2" / "4,3" — one decimal, comma separator (matches German conventions
+// and the price text style). Inputs above 5 (impossible per spec) are
+// clamped so a glitched value can't render as "12,3".
+internal fun formatRating(value: Float): String {
+    val clamped = value.coerceIn(0f, 5f)
+    val tenths = (clamped * 10f + 0.5f).toInt()
+    val whole = tenths / 10
+    val frac = tenths % 10
+    return "$whole,$frac"
 }

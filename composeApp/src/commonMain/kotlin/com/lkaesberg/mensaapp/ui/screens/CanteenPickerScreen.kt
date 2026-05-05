@@ -36,7 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lkaesberg.mensaapp.MealsAppState
 import com.lkaesberg.mensaapp.data.CanteenStaticData
-import com.lkaesberg.mensaapp.data.HoursEntry
+import com.lkaesberg.mensaapp.data.HoursLine
+import com.lkaesberg.mensaapp.i18n.LocalStrings
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.components.MTopBar
 import com.lkaesberg.mensaapp.ui.components.OccupancyChip
@@ -158,9 +159,21 @@ fun CanteenPickerScreen(
                                 )
                             }
                         }
-                        if (info != null) {
+                        // Active canteen → full week schedule (DB-driven with
+                        // a static fallback). Other canteens → just today's
+                        // line, since the user is browsing a list and the
+                        // full grid is noise for the ones they're not on.
+                        val labels = LocalStrings.current.weekdaysShort
+                        val closedLabel = LocalStrings.current.closedLabel
+                        val lines: List<HoursLine> = if (isActive) {
+                            state.hoursLinesFor(canteen, labels, closedLabel)
+                        } else {
+                            state.todayHoursLineFor(canteen, labels, closedLabel)
+                                ?.let { listOf(it) } ?: emptyList()
+                        }
+                        if (lines.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            HoursList(hours = info.hours, todayDow = todayDow)
+                            HoursList(lines = lines, todayDow = todayDow)
                         }
                     }
                     Icon(
@@ -177,12 +190,12 @@ fun CanteenPickerScreen(
 
 @Composable
 private fun HoursList(
-    hours: List<HoursEntry>,
+    lines: List<HoursLine>,
     todayDow: kotlinx.datetime.DayOfWeek,
 ) {
     val palette = MensaTheme.palette
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        hours.forEach { h ->
+        lines.forEach { h ->
             val isToday = todayDow in h.days
             val labelColor = if (isToday) palette.ink else palette.sub
             val weight = if (isToday) FontWeight.Bold else FontWeight.Medium
@@ -200,7 +213,7 @@ private fun HoursList(
                 )
                 Box(modifier = Modifier.weight(1f).height(1.dp).background(palette.hair.copy(alpha = 0.6f)))
                 Text(
-                    text = h.time,
+                    text = h.timeLabel,
                     color = labelColor,
                     fontSize = 11.sp,
                     fontWeight = weight,

@@ -200,7 +200,11 @@ fun CanteenDetailScreen(
                     Text("Öffnungszeiten", color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(8.dp))
-                info.hours.forEachIndexed { i, h ->
+                val labels = com.lkaesberg.mensaapp.i18n.LocalStrings.current.weekdaysShort
+                val closedLabel = com.lkaesberg.mensaapp.i18n.LocalStrings.current.closedLabel
+                val hourLines = canteen?.let { state.hoursLinesFor(it, labels, closedLabel) }
+                    ?: com.lkaesberg.mensaapp.data.HoursDisplay.fromStatic(info.hours)
+                hourLines.forEachIndexed { i, h ->
                     if (i > 0) {
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(palette.hair))
                     }
@@ -209,7 +213,7 @@ fun CanteenDetailScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(h.daysLabel, color = palette.sub, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        Text(h.time, color = palette.ink, fontSize = 12.sp, style = MonoNumericStyle, fontWeight = FontWeight.SemiBold)
+                        Text(h.timeLabel, color = palette.ink, fontSize = 12.sp, style = MonoNumericStyle, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
