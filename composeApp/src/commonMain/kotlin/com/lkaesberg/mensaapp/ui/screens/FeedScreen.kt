@@ -206,18 +206,17 @@ fun FeedScreen(
         ) { pageIdx ->
             val pageDate = allDates.getOrElse(pageIdx) { today }
             val isBeforeOpening = selectedCanteen?.let { state.beforeOpeningToday(it) } ?: false
-            val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id, isBeforeOpening, canteenHoursMap) {
+            val pageBuckets = remember(mealsByDate, pageDate, selectedFilters.value, selectedCanteen?.id) {
+                // Note: we deliberately do *not* hide DB-deactivated rows on
+                // today before opening any more. The scraper's deactivation
+                // pass races with the upstream's morning publish, so the
+                // entire day's menu can carry `deactivated_at` even though it
+                // will be served. Filtering here would empty the screen
+                // before lunch. The `keepTodayActive` flag below handles the
+                // visual side: those rows render at full opacity until the
+                // canteen actually closes.
                 val all = mealsByDate[pageDate].orEmpty()
                     .filter { mealMatchesDietaryFilters(it, selectedFilters.value) }
-                    .filter { md ->
-                        // Hide DB-deactivated rows on today *before the canteen
-                        // opens*. The scraper deactivates rows when an upstream
-                        // refresh stops listing them; before service starts the
-                        // upstream menu is still mutable, so showing those rows
-                        // (even greyed) is noise. After opening, they stay
-                        // visible (greyed) as a "what was on offer today" hint.
-                        !(pageDate == today && md.deactivatedAt != null && isBeforeOpening)
-                    }
                 val hideAfternoon = shouldHideAfternoonMealsForCanteenOnDate(selectedCanteen, all)
                 separateMealsByPeriod(all, hideAfternoon)
             }
