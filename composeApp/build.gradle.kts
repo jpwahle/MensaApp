@@ -109,8 +109,8 @@ android {
         applicationId = "com.lkaesberg.mensaapp"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 13
-        versionName = "2.5"
+        versionCode = 14
+        versionName = "2.6"
     }
     packaging {
         resources {
