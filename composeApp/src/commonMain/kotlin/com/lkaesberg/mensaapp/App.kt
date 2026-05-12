@@ -61,6 +61,7 @@ import com.lkaesberg.mensaapp.notifications.NotificationScheduler
 import com.lkaesberg.mensaapp.ui.MensaAppTheme
 import com.lkaesberg.mensaapp.ui.MensaTheme
 import com.lkaesberg.mensaapp.ui.Route
+import com.lkaesberg.mensaapp.ui.SystemBarThemeEffect
 import com.lkaesberg.mensaapp.ui.navigateSafely
 import com.lkaesberg.mensaapp.ui.popBackStackSafely
 import com.lkaesberg.mensaapp.ui.screens.AllMealsArchiveScreen
@@ -102,6 +103,9 @@ fun App(
     val locale by state.locale.collectAsState()
 
     MensaAppTheme(useDarkTheme = isDarkMode) {
+      // Match the OS status-bar icon colors to the app background — without
+      // this the default light icons disappear on our pale paper palette.
+      SystemBarThemeEffect(isDarkBackground = isDarkMode)
       CompositionLocalProvider(
           LocalStrings provides stringsFor(locale),
           LocalAppLocale provides locale,

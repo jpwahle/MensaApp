@@ -241,6 +241,29 @@ class MealsAppState(
     }
 
     /**
+     * Open/close times for a canteen on a specific date, DB-first with the
+     * legacy static fallback. Returns null when the canteen is closed that
+     * day (or hours aren't known). Used by the feed to derive Mittag /
+     * Nachmittag time ranges instead of hardcoding them.
+     */
+    fun openCloseFor(canteen: Canteen, date: LocalDate): Pair<LocalTime, LocalTime>? {
+        val isoDow = date.dayOfWeek.isoDayNumber
+        val rows = _canteenHours.value[canteen.id]
+        if (rows != null) {
+            val row = rows.firstOrNull { it.dayOfWeek == isoDow }
+            val open = parseDbTime(row?.openTime)
+            val close = parseDbTime(row?.closeTime)
+            return if (open != null && close != null) open to close else null
+        }
+        // Static fallback when canteen_hours hasn't synced yet.
+        val info = CanteenStaticData.matchFor(canteen.name) ?: return null
+        val entry = info.hours.firstOrNull { date.dayOfWeek in it.days } ?: return null
+        val open = entry.openTime ?: return null
+        val close = entry.closeTime ?: return null
+        return open to close
+    }
+
+    /**
      * `true` if it's currently before the canteen's opening time today.
      * Used to suppress the deactivated-meal "greyed out" styling in the
      * feed: meals that the scraper has marked deactivated for today should

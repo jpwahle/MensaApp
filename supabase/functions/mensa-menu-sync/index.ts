@@ -60,6 +60,10 @@ interface Speise {
   allergens: string[];
   additives: string[];
   rating: number | null;
+  // <mittag> integer — 0 = served whenever the canteen is open, >0 = lunch-only.
+  // Persisted on `meal_dates` so the app can drive the Mittag/Nachmittag
+  // split off a structured signal instead of free-text notes.
+  mittag: number | null;
   // prices
   priceStudents: string | null;
   priceEmployees: string | null;
@@ -162,6 +166,8 @@ function parseSpeise(speise: Element, mensaName: string): Speise | null {
   const priceStudents = txt(speise, 'preis_stu') || null;
   const priceEmployees = txt(speise, 'preis_mit') || null;
   const priceGuests = txt(speise, 'preis_gas') || null;
+  const mittagRaw = parseInt(txt(speise, 'mittag'), 10);
+  const mittag = Number.isFinite(mittagRaw) ? mittagRaw : null;
 
   return {
     externalId,
@@ -181,6 +187,7 @@ function parseSpeise(speise: Element, mensaName: string): Speise | null {
     allergens,
     additives,
     rating,
+    mittag,
     priceStudents,
     priceEmployees,
     priceGuests,
@@ -248,13 +255,15 @@ async function upsertDay(speisen: Speise[]): Promise<UpsertResult> {
       }
     }
 
-    // 2. Bulk upsert meals. Dedupe by full_text — Postgres' ON CONFLICT
-    //    can't update the same key twice in one statement, so we keep the
-    //    last occurrence per full_text (last-write-wins is fine; the
-    //    fields are all snapshotted from the same upstream API).
-    const mealRowByFullText = new Map<string, Record<string, unknown>>();
+    // 2. Bulk upsert meals. Dedupe by external_id — `<speise id>` is the
+    //    stable upstream key, so the same dish across multiple days
+    //    collapses to one row. Postgres' ON CONFLICT also requires unique
+    //    keys within the statement, and we made external_id the conflict
+    //    target in the 2026-05-08 migration (full_text drifts day-to-day
+    //    as allergen codes change, so it's no longer a reliable dedup key).
+    const mealRowByExternalId = new Map<number, Record<string, unknown>>();
     for (const s of speisen) {
-      mealRowByFullText.set(s.fullText, {
+      mealRowByExternalId.set(s.externalId, {
         title: s.rawTitle,
         full_text: s.fullText,
         clean_title: s.cleanTitle,
@@ -271,47 +280,38 @@ async function upsertDay(speisen: Speise[]): Promise<UpsertResult> {
         recipe_name: s.recipeName,
       });
     }
-    const mealPayloads = [...mealRowByFullText.values()];
+    const mealPayloads = [...mealRowByExternalId.values()];
     const { data: upsertedMeals, error: mealErr } = await supabase
       .from('meals')
-      .upsert(mealPayloads, { onConflict: 'full_text' })
-      .select('id, full_text');
+      .upsert(mealPayloads, { onConflict: 'external_id' })
+      .select('id, external_id');
     if (mealErr) throw mealErr;
-    const mealIdByFullText = new Map<string, string>();
-    for (const m of (upsertedMeals ?? []) as Array<{ id: string; full_text: string }>) {
-      mealIdByFullText.set(m.full_text, m.id);
+    const mealIdByExternalId = new Map<number, string>();
+    for (const m of (upsertedMeals ?? []) as Array<{ id: string; external_id: number }>) {
+      mealIdByExternalId.set(m.external_id, m.id);
     }
 
-    // 3. Bulk upsert meal_dates. Dedupe twice:
-    //    - by (canteen_id, served_on, category) — the upsert conflict target;
-    //    - by (canteen_id, served_on, meal_id) — the *legacy* UNIQUE on
-    //      meal_dates. If the same dish (same full_text → same meal_id)
-    //      appears in two categories on the same canteen+day (e.g., "Menü"
-    //      AND "Last Minute"), the second insert would violate the legacy
-    //      constraint. Drop it client-side.
+    // 3. Bulk upsert meal_dates. Dedupe by (canteen_id, served_on, category)
+    //    only — that's the upsert conflict target. The legacy
+    //    (meal_id, canteen_id, served_on) UNIQUE was dropped in the
+    //    2026-05-10 migration, so the same dish can now legitimately appear
+    //    under two categories on one day (e.g. "Menü 1" + "Salatbuffet").
     const dateRowByPrimary = new Map<string, Record<string, unknown>>();
-    const seenLegacyTriple = new Set<string>();
     for (const s of speisen) {
       const canteenId = canteenIdByName.get(s.mensa);
-      const mealId = mealIdByFullText.get(s.fullText);
+      const mealId = mealIdByExternalId.get(s.externalId);
       if (!canteenId || !mealId) {
         fail++;
         continue;
       }
-      const legacyKey = `${canteenId}|${s.date}|${mealId}`;
       const primaryKey = `${canteenId}|${s.date}|${s.category}`;
-      if (seenLegacyTriple.has(legacyKey) && !dateRowByPrimary.has(primaryKey)) {
-        // Same dish already claimed under another category for this day.
-        // Skip silently — keep the first occurrence.
-        continue;
-      }
-      seenLegacyTriple.add(legacyKey);
       dateRowByPrimary.set(primaryKey, {
         meal_id: mealId,
         canteen_id: canteenId,
         served_on: s.date,
         category: s.category,
         deactivated_at: null,
+        mittag: s.mittag,
         price_students: s.priceStudents,
         price_employees: s.priceEmployees,
         price_guests: s.priceGuests,

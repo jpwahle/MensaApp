@@ -86,11 +86,19 @@ class ComposeAppCommonTest {
     }
 
     @Test
-    fun shouldHideAfternoonMealsForCanteenOnDate_doesNotHideForOtherCanteens() {
-        assertFalse(
+    fun shouldHideAfternoonMealsForCanteenOnDate_hidesForNonZentralmensaCanteens() {
+        // Only Zentralmensa has an afternoon menu — every other canteen
+        // closes at 14:30, so the section is always hidden for them.
+        assertTrue(
             shouldHideAfternoonMealsForCanteenOnDate(
                 canteen = Canteen(id = "2", name = "CGiN"),
-                meals = listOf(sampleMealDate(servedOn = "2026-04-18"))
+                meals = listOf(sampleMealDate(servedOn = "2026-04-22"))
+            )
+        )
+        assertTrue(
+            shouldHideAfternoonMealsForCanteenOnDate(
+                canteen = Canteen(id = "3", name = "Mensa am Turm"),
+                meals = listOf(sampleMealDate(servedOn = "2026-04-22"))
             )
         )
     }

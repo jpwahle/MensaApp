@@ -55,6 +55,10 @@ data class MealDate(
     @SerialName("deactivated_at") val deactivatedAt: String? = null,
     // "lunch" | "afternoon" | null. Drives the time-separator on the feed.
     @SerialName("meal_period") val mealPeriod: String? = null,
+    // Upstream `<mittag>` integer (2026-05-07 migration). 0 = served whenever
+    // the canteen is open; >0 = lunch-only. Primary signal for the
+    // Mittag/Nachmittag split at Zentralmensa.
+    val mittag: Int? = null,
 
     // Per-dish prices populated by the new API scraper (2026-05-05).
     // Nullable for rows scraped before the migration.

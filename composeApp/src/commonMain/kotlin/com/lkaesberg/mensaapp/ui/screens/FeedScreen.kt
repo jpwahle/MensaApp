@@ -243,6 +243,33 @@ fun FeedScreen(
                     )
                 }
             } else {
+                // Derive Mittag / Nachmittag time ranges from the canteen's
+                // actual opening hours for this date. Lunch runs from open
+                // to the standard German Mittagstisch cutoff (14:30); the
+                // afternoon section only appears when the canteen stays open
+                // past that — i.e., Zentralmensa Mo–Do (and the upstream
+                // doesn't return afternoon rows for anyone else anyway).
+                val locale = com.lkaesberg.mensaapp.i18n.LocalAppLocale.current
+                val openClose = selectedCanteen?.let { state.openCloseFor(it, pageDate) }
+                // Canteens without afternoon service render the full open
+                // window as lunch — capping at 14:30 only makes sense when
+                // there's a Nachmittag section the cutoff splits into.
+                val hasAfternoon = !shouldHideAfternoonMealsForCanteenOnDate(
+                    selectedCanteen,
+                    mealsByDate[pageDate].orEmpty(),
+                )
+                val lunchLabel = periodLabel(
+                    period = MealPeriod.Lunch,
+                    openClose = openClose,
+                    locale = locale,
+                    hasAfternoon = hasAfternoon,
+                )
+                val afternoonLabel = periodLabel(
+                    period = MealPeriod.Afternoon,
+                    openClose = openClose,
+                    locale = locale,
+                    hasAfternoon = hasAfternoon,
+                )
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -250,7 +277,7 @@ fun FeedScreen(
                 ) {
                     if (lunchMeals.isNotEmpty()) {
                         item(key = "sep-lunch") {
-                            TimeSeparator(label = "MITTAG · 11:30 – 14:30")
+                            TimeSeparator(label = lunchLabel)
                         }
                         items(lunchMeals, key = { "lunch-${it.id}" }) { md ->
                             FeedMealCard(
@@ -266,7 +293,7 @@ fun FeedScreen(
                     }
                     if (afternoonMeals.isNotEmpty()) {
                         item(key = "sep-afternoon") {
-                            TimeSeparator(label = "NACHMITTAG · 14:30 – 16:30")
+                            TimeSeparator(label = afternoonLabel)
                         }
                         items(afternoonMeals, key = { "afternoon-${it.id}" }) { md ->
                             FeedMealCard(
@@ -558,4 +585,50 @@ private fun DatePickerSheet(
         androidx.compose.material3.DatePicker(state = state)
     }
 }
+
+private enum class MealPeriod { Lunch, Afternoon }
+
+/** Standard German Mittagstisch cutoff used to split the day. */
+private val LUNCH_CUTOFF = kotlinx.datetime.LocalTime(14, 30)
+
+/**
+ * "MITTAG · 11:30 – 14:30" / "NACHMITTAG · 14:30 – 18:00" — derived from
+ * the canteen's actual open/close times for this date. Falls back to the
+ * bare period word when hours are unknown.
+ *
+ * When `hasAfternoon == false` the canteen has no Nachmittag service, so
+ * the lunch range covers the full open window (e.g. Bistro HAWK runs
+ * 07:45–14:45 as one long lunch slot — capping at 14:30 would mislead).
+ */
+private fun periodLabel(
+    period: MealPeriod,
+    openClose: Pair<kotlinx.datetime.LocalTime, kotlinx.datetime.LocalTime>?,
+    locale: com.lkaesberg.mensaapp.data.Locale,
+    hasAfternoon: Boolean,
+): String {
+    val word = when (period to (locale == com.lkaesberg.mensaapp.data.Locale.De)) {
+        MealPeriod.Lunch to true -> "MITTAG"
+        MealPeriod.Lunch to false -> "LUNCH"
+        MealPeriod.Afternoon to true -> "NACHMITTAG"
+        MealPeriod.Afternoon to false -> "AFTERNOON"
+        else -> ""
+    }
+    val oc = openClose ?: return word
+    val (open, close) = oc
+    val cutoffMin = LUNCH_CUTOFF.hour * 60 + LUNCH_CUTOFF.minute
+    val openMin = open.hour * 60 + open.minute
+    val closeMin = close.hour * 60 + close.minute
+    val (rangeStart, rangeEnd) = when (period) {
+        MealPeriod.Lunch -> when {
+            !hasAfternoon -> open to close                                // full window
+            closeMin < cutoffMin -> open to close                          // closes before cutoff
+            else -> open to LUNCH_CUTOFF                                   // standard split
+        }
+        MealPeriod.Afternoon -> (if (openMin > cutoffMin) open else LUNCH_CUTOFF) to close
+    }
+    return "$word · ${fmtTime(rangeStart)} – ${fmtTime(rangeEnd)}"
+}
+
+private fun fmtTime(t: kotlinx.datetime.LocalTime): String =
+    "${t.hour.toString().padStart(2, '0')}:${t.minute.toString().padStart(2, '0')}"
 
