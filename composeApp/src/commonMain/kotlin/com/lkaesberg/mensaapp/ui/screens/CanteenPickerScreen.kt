@@ -43,7 +43,7 @@ import com.lkaesberg.mensaapp.ui.components.MTopBar
 import com.lkaesberg.mensaapp.ui.components.OccupancyChip
 import com.lkaesberg.mensaapp.ui.components.OccupancyStats
 import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import androidx.compose.runtime.LaunchedEffect

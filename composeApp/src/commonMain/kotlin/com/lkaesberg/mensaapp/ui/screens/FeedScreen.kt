@@ -63,7 +63,7 @@ import com.lkaesberg.mensaapp.ui.components.FilterChipsRow
 import com.lkaesberg.mensaapp.ui.components.MealCard
 import com.lkaesberg.mensaapp.ui.components.OccupancyChip
 import com.lkaesberg.mensaapp.ui.components.TimeSeparator
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate

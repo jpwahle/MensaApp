@@ -12,7 +12,11 @@
       "Bash(./gradlew :composeApp:tasks --all)",
       "Bash(./gradlew :composeApp:compileKotlinWasmJs)",
       "Bash(./gradlew :composeApp:compileKotlinIosSimulatorArm64)",
-      "Bash(./gradlew :composeApp:compileCommonMainKotlinMetadata)"
+      "Bash(./gradlew :composeApp:compileCommonMainKotlinMetadata)",
+      "WebFetch(domain:search.maven.org)",
+      "Bash(curl -s \"https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-datetime/maven-metadata.xml\")",
+      "Bash(xargs sed -i '' 's|^import kotlinx\\\\.datetime\\\\.Clock$|import kotlin.time.Clock|')",
+      "Bash(curl -s \"https://repo1.maven.org/maven2/org/jetbrains/androidx/navigation/navigation-compose/maven-metadata.xml\")"
     ]
   }
 }

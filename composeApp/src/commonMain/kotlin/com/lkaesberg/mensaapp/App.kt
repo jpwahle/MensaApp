@@ -53,6 +53,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.savedstate.read
 import androidx.compose.runtime.CompositionLocalProvider
 import com.lkaesberg.mensaapp.i18n.LocalAppLocale
 import com.lkaesberg.mensaapp.i18n.LocalStrings
@@ -120,7 +121,7 @@ fun App(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MensaTheme.palette.paper)
-                .systemBarsPadding(),
+                .statusBarsPadding(),
             contentAlignment = Alignment.TopCenter,
         ) {
         Box(
@@ -165,7 +166,7 @@ fun App(
                 route = Route.CanteenDetail,
                 arguments = listOf(navArgument("slug") { type = NavType.StringType }),
             ) { backStackEntry ->
-                val slug = backStackEntry.arguments?.getString("slug").orEmpty()
+                val slug = backStackEntry.arguments?.read { getString("slug") }.orEmpty()
                 CanteenDetailScreen(
                     state = state,
                     slug = slug,
@@ -176,7 +177,7 @@ fun App(
                 route = Route.MealDetail,
                 arguments = listOf(navArgument("dateId") { type = NavType.StringType }),
             ) { backStackEntry ->
-                val dateId = backStackEntry.arguments?.getString("dateId").orEmpty()
+                val dateId = backStackEntry.arguments?.read { getString("dateId") }.orEmpty()
                 MealDetailScreen(
                     state = state,
                     dateId = dateId,

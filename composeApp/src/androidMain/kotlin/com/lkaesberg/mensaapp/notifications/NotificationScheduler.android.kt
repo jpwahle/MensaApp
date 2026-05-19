@@ -30,7 +30,7 @@ import com.russhwolf.settings.SharedPreferencesSettings
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -108,6 +108,8 @@ actual class NotificationScheduler actual constructor() {
             NotificationManagerCompat.from(ctx).areNotificationsEnabled()
         }
     }
+
+    actual fun isSupported(): Boolean = true
 
     private fun schedulePeriodic(ctx: Context, leadDays: Int, hourOfDay: Int) {
         val initialDelay = millisUntilNextAt(hourOfDay)

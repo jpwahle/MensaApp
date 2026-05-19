@@ -153,6 +153,7 @@ fun SettingsScreen(
                 }
             }
 
+            if (state.notificationScheduler.isSupported()) {
             SectionHeader("BENACHRICHTIGUNGEN")
             SettingRow(
                 "Favoriten-Erinnerung",
@@ -282,6 +283,7 @@ fun SettingsScreen(
                     }
                 }
             }
+            } // end notification section
             Spacer(Modifier.height(40.dp))
         }
     }

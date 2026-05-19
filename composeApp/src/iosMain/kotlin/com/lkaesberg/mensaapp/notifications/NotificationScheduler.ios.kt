@@ -16,4 +16,5 @@ actual class NotificationScheduler actual constructor() {
         return false
     }
     actual fun isPermitted(): Boolean = false
+    actual fun isSupported(): Boolean = false
 }

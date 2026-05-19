@@ -14,6 +14,7 @@ struct ComposeView: UIViewControllerRepresentable {
 struct ContentView: View {
     var body: some View {
         ComposeView()
+            .ignoresSafeArea() // Compose handles status/home-indicator insets via systemBarsPadding()
             .ignoresSafeArea(.keyboard) // Compose has own keyboard handler
     }
 }

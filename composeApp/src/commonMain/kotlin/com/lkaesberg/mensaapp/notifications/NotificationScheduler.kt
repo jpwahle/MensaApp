@@ -31,4 +31,10 @@ expect class NotificationScheduler() {
      * Used by the onboarding screen to decide whether to ask.
      */
     fun isPermitted(): Boolean
+
+    /**
+     * Whether this platform actually delivers notifications. iOS / wasmJs are
+     * no-op stubs and return false, letting the UI hide notification controls.
+     */
+    fun isSupported(): Boolean
 }

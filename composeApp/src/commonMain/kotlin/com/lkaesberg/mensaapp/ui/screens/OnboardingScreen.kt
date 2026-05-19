@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,8 +56,6 @@ import com.lkaesberg.mensaapp.ui.components.DietPip
 import com.lkaesberg.mensaapp.ui.components.Plate
 import kotlin.random.Random
 
-private const val STEP_COUNT = 4
-
 @Composable
 fun OnboardingScreen(
     state: MealsAppState,
@@ -68,6 +67,8 @@ fun OnboardingScreen(
     var step by remember { mutableStateOf(0) }
     val canteens by state.canteens.collectAsState()
     val upcomingMap by state.upcomingAcrossCanteens.collectAsState()
+    val notificationsSupported = remember { state.notificationScheduler.isSupported() }
+    val stepCount = if (notificationsSupported) 4 else 3
 
     LaunchedEffect(Unit) {
         state.loadCanteens(scope)
@@ -88,9 +89,10 @@ fun OnboardingScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(palette.paper)
+            .navigationBarsPadding()
             .padding(horizontal = 22.dp, vertical = 20.dp),
     ) {
-        StepIndicator(step = step, totalSteps = STEP_COUNT, palette = palette)
+        StepIndicator(step = step, totalSteps = stepCount, palette = palette)
         Spacer(Modifier.height(20.dp))
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -103,8 +105,8 @@ fun OnboardingScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        when (step) {
-            STEP_COUNT - 1 -> {
+        when {
+            step == stepCount - 1 && notificationsSupported -> {
                 // Final step: enable notifications + finish
                 Button(
                     onClick = {
@@ -144,6 +146,32 @@ fun OnboardingScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("Ohne Benachrichtigungen fortfahren", color = palette.sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            step == stepCount - 1 -> {
+                // Last step but notifications aren't supported (iOS / wasm) —
+                // just finish.
+                Button(
+                    onClick = { finishOnboarding() },
+                    enabled = canContinue(step, state, canteens),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(100.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.forest, contentColor = Color.White),
+                    contentPadding = PaddingValues(vertical = 14.dp),
+                ) {
+                    Text("Los geht's", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.clickable { step -= 1 }.padding(8.dp),
+                    ) {
+                        Text("Zurück", color = palette.sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
             else -> {
