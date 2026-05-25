@@ -1,27 +1,54 @@
 #!/bin/sh
 # Xcode Cloud post-clone script for Kotlin Multiplatform / Compose Multiplatform.
-# Apple's Xcode Cloud runner has no JDK on PATH by default, so the
-# `:composeApp:embedAndSignAppleFrameworkForXcode` Gradle task (called from the
-# "Compile Kotlin Framework" build phase in iosApp.xcodeproj) would fail.
-# This script installs a JDK, exports JAVA_HOME, and pre-warms Gradle so the
-# Xcode archive step has a cached Kotlin framework ready.
+#
+# Apple's Xcode Cloud runner has no JDK on PATH, so the
+# ":composeApp:embedAndSignAppleFrameworkForXcode" Gradle task (invoked by the
+# "Compile Kotlin Framework" build phase in iosApp.xcodeproj) fails with
+# "Unable to locate a Java Runtime."
+#
+# Note: env vars exported here do NOT propagate to xcodebuild's child shells.
+# We therefore pin the JDK via ~/.gradle/gradle.properties (org.gradle.java.home),
+# which Gradle picks up regardless of the parent process's environment.
 
 set -euxo pipefail
 
-# 1. Install JDK 21 via Homebrew (preinstalled on Xcode Cloud images)
+# 1. Install JDK 21 (Homebrew is preinstalled on Xcode Cloud images)
 brew install --quiet openjdk@21
 
-# 2. Make the JDK discoverable via /usr/libexec/java_home
-sudo ln -sfn "$(brew --prefix)/opt/openjdk@21/libexec/openjdk.jdk" \
+# 2. Compute and verify the JDK path
+JDK_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home"
+if [ ! -x "$JDK_HOME/bin/java" ]; then
+  echo "ERROR: java binary not found at $JDK_HOME/bin/java"
+  ls -la "$(brew --prefix openjdk@21)" || true
+  ls -la "$(brew --prefix openjdk@21)/libexec" || true
+  exit 1
+fi
+
+# 3. Pin JDK in ~/.gradle/gradle.properties so xcodebuild's "Compile Kotlin
+#    Framework" build phase finds it. (Env vars from this script do not
+#    propagate to xcodebuild subprocesses; properties files do.)
+mkdir -p "$HOME/.gradle"
+touch "$HOME/.gradle/gradle.properties"
+# Strip any prior pin so re-runs don't accumulate duplicates
+sed -i.bak '/^org\.gradle\.java\.home=/d' "$HOME/.gradle/gradle.properties"
+rm -f "$HOME/.gradle/gradle.properties.bak"
+echo "org.gradle.java.home=$JDK_HOME" >> "$HOME/.gradle/gradle.properties"
+
+# 4. Also register the JDK in /Library so /usr/libexec/java_home finds it.
+#    (Belt-and-suspenders — primary mechanism is the gradle.properties pin above.)
+sudo mkdir -p /Library/Java/JavaVirtualMachines
+sudo ln -sfn "$(brew --prefix openjdk@21)/libexec/openjdk.jdk" \
   /Library/Java/JavaVirtualMachines/openjdk-21.jdk
 
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-echo "JAVA_HOME=$JAVA_HOME"
+export JAVA_HOME="$JDK_HOME"
 java -version
 
-# 3. Pre-warm Gradle so the in-Xcode build phase reuses the framework
+# 5. Pre-warm Gradle: download dependencies and build the Kotlin framework
+#    Gradle-side so xcodebuild's build phase has a hot cache.
+#    Using linkDebugFrameworkIosArm64 instead of embedAndSignAppleFrameworkForXcode
+#    because the latter reads xcodebuild env vars (CONFIGURATION, SDK_NAME, ARCHS,
+#    BUILT_PRODUCTS_DIR, ...) that aren't set here. Xcode Cloud builds Debug for
+#    generic/platform=iOS (arm64 device), so this matches the actual build.
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 chmod +x ./gradlew
-./gradlew --no-daemon :composeApp:embedAndSignAppleFrameworkForXcode \
-  -PXCODE_CONFIGURATION=Release \
-  -PSDK_NAME=iphoneos
+./gradlew --no-daemon :composeApp:linkDebugFrameworkIosArm64
