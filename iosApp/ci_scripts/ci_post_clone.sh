@@ -34,11 +34,10 @@ sed -i.bak '/^org\.gradle\.java\.home=/d' "$HOME/.gradle/gradle.properties"
 rm -f "$HOME/.gradle/gradle.properties.bak"
 echo "org.gradle.java.home=$JDK_HOME" >> "$HOME/.gradle/gradle.properties"
 
-# 4. Also register the JDK in /Library so /usr/libexec/java_home finds it.
-#    (Belt-and-suspenders — primary mechanism is the gradle.properties pin above.)
-sudo mkdir -p /Library/Java/JavaVirtualMachines
-sudo ln -sfn "$(brew --prefix openjdk@21)/libexec/openjdk.jdk" \
-  /Library/Java/JavaVirtualMachines/openjdk-21.jdk
+# 4. Skipping /Library/Java/JavaVirtualMachines symlink — Xcode Cloud's CI
+#    user has no passwordless sudo, and the "Compile Kotlin Framework" build
+#    phase in iosApp.xcodeproj finds the brew JDK directly via its discovery
+#    loop ($(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home).
 
 export JAVA_HOME="$JDK_HOME"
 java -version
