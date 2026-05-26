@@ -16,7 +16,13 @@
       "WebFetch(domain:search.maven.org)",
       "Bash(curl -s \"https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-datetime/maven-metadata.xml\")",
       "Bash(xargs sed -i '' 's|^import kotlinx\\\\.datetime\\\\.Clock$|import kotlin.time.Clock|')",
-      "Bash(curl -s \"https://repo1.maven.org/maven2/org/jetbrains/androidx/navigation/navigation-compose/maven-metadata.xml\")"
+      "Bash(curl -s \"https://repo1.maven.org/maven2/org/jetbrains/androidx/navigation/navigation-compose/maven-metadata.xml\")",
+      "Bash(xcodebuild -list -project iosApp/iosApp.xcodeproj)",
+      "Bash(ls -la /tmp/ | grep -iE \"build.6|xcb6|rpd6|build_6|build-6\")",
+      "Bash(xcodebuild -showBuildSettings -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphoneos)",
+      "Bash(rm -rf /tmp/mensa-test-dd)",
+      "Bash(xcodebuild build *)",
+      "Bash(rm -rf /tmp/mensa-test-dd /tmp/mensa-test-result.xcresult *)"
     ]
   }
 }
