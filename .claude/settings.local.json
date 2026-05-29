@@ -22,7 +22,9 @@
       "Bash(xcodebuild -showBuildSettings -project iosApp/iosApp.xcodeproj -scheme iosApp -configuration Debug -sdk iphoneos)",
       "Bash(rm -rf /tmp/mensa-test-dd)",
       "Bash(xcodebuild build *)",
-      "Bash(rm -rf /tmp/mensa-test-dd /tmp/mensa-test-result.xcresult *)"
+      "Bash(rm -rf /tmp/mensa-test-dd /tmp/mensa-test-result.xcresult *)",
+      "Read(//private/tmp/xcc-build14/MensaApp Göttingen Build 14 Logs for iosApp archive/**)",
+      "Bash(sed -n '222,235p' ci_post_clone.log)"
     ]
   }
 }

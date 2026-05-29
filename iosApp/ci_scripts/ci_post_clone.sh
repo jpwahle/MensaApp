@@ -43,11 +43,29 @@ export JAVA_HOME="$JDK_HOME"
 java -version
 
 # 5. Pre-warm Gradle: download dependencies and build the Kotlin framework
-#    Gradle-side so xcodebuild's build phase has a hot cache.
-#    Using linkDebugFrameworkIosArm64 instead of embedAndSignAppleFrameworkForXcode
-#    because the latter reads xcodebuild env vars (CONFIGURATION, SDK_NAME, ARCHS,
-#    BUILT_PRODUCTS_DIR, ...) that aren't set here. Xcode Cloud builds Debug for
-#    generic/platform=iOS (arm64 device), so this matches the actual build.
+#    Gradle-side so xcodebuild's "Compile Kotlin Framework" phase has a hot cache.
+#    embedAndSignAppleFrameworkForXcode can't be invoked directly here (it needs
+#    xcodebuild env vars: CONFIGURATION, SDK_NAME, ARCHS, BUILT_PRODUCTS_DIR).
+#    Instead pre-warm the underlying linker task that matches the action
+#    xcodebuild runs next, keyed off CI_XCODEBUILD_ACTION. An "Archive - iOS"
+#    workflow builds the RELEASE framework for the arm64 device (this is what
+#    App Store / TestFlight uploads use) — pre-warming Debug here just forces a
+#    cold Release compile during the archive.
+#      archive                       -> Release / device
+#      test / test-without-building  -> Debug / simulator
+#      build (default)               -> Debug / device
+case "${CI_XCODEBUILD_ACTION:-}" in
+  archive)
+    PREWARM_TASK=":composeApp:linkReleaseFrameworkIosArm64"
+    ;;
+  test|test-without-building)
+    PREWARM_TASK=":composeApp:linkDebugFrameworkIosSimulatorArm64"
+    ;;
+  *)
+    PREWARM_TASK=":composeApp:linkDebugFrameworkIosArm64"
+    ;;
+esac
+
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 chmod +x ./gradlew
-./gradlew --no-daemon :composeApp:linkDebugFrameworkIosArm64
+./gradlew --no-daemon "$PREWARM_TASK"
