@@ -26,6 +26,12 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
+            // Explicit CFBundleIdentifier for the generated framework Info.plist.
+            // Without it, Kotlin/Native can't infer one and falls back to the bare
+            // framework name ("ComposeApp"), emitting "Cannot infer a bundle ID …".
+            // This is the shared framework's own identifier — intentionally distinct
+            // from the iOS app bundle ID (com.lkaesberg.mensaapp.ComposeApp).
+            binaryOption("bundleId", "com.lkaesberg.mensaapp.shared")
         }
     }
 
