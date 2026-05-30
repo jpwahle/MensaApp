@@ -1,6 +1,11 @@
 TEAM_ID=S5NQXKYPKT
 
-PRODUCT_NAME=Mensa App Göttingen
+# PRODUCT_NAME must stay plain ASCII. A non-ASCII char (e.g. the ö in
+# "Göttingen") in the executable name causes an NFC/NFD Unicode-normalization
+# mismatch between the binary's filename and CFBundleExecutable, so codesign seals
+# the main binary as a *resource* and the signature self-invalidates -> App Store
+# rejection ITMS-90034. The user-facing name lives in CFBundleDisplayName (Info.plist).
+PRODUCT_NAME=MensaApp
 PRODUCT_BUNDLE_IDENTIFIER=com.lkaesberg.mensaapp.ComposeApp
 
 CURRENT_PROJECT_VERSION=1
