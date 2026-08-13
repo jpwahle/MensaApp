@@ -9,18 +9,22 @@ TEAM_ID=S5NQXKYPKT
 PRODUCT_NAME=MensaApp
 PRODUCT_BUNDLE_IDENTIFIER=com.lkaesberg.mensaapp.ComposeApp
 
-// Version numbers — both are set automatically on Xcode Cloud, so uploads can
-// never be rejected for a duplicate or closed version. You never have to bump
-// anything by hand to ship.
+// Version numbers — both are set automatically on Xcode Cloud by
+// ci_scripts/ci_pre_xcodebuild.sh, so uploads can never be rejected for a
+// duplicate or closed version. You never have to bump anything by hand to ship.
 //
-// MARKETING_VERSION below is the human-controlled MAJOR.MINOR base — the part you
-// actually name (1.0, 1.1, 2.0 ...). ci_scripts/ci_pre_xcodebuild.sh appends the
-// build number as the patch, so the PUBLIC App Store version becomes e.g. 1.0.12,
-// always unique and always higher than anything already approved. Bump the
-// major.minor here to mark a milestone (set 1.1 -> ships as 1.1.<build>); only
-// ever raise it, never lower it.
+// Release (tag) builds: pushing a git tag like v1.1 stamps MARKETING_VERSION
+// with the tag itself (v1.1 -> public App Store version 1.1), and
+// .github/workflows/release-app-store.yml then writes the release notes and
+// submits that build for review automatically. See .github/RELEASING.md.
 //
-// CURRENT_PROJECT_VERSION (CFBundleVersion, the build number) is likewise set to
+// Branch (main) builds: CI stamps <major.minor>.<CI_BUILD_NUMBER> (e.g. 1.1.37)
+// for TestFlight, where major.minor comes from the latest release tag. The
+// MARKETING_VERSION below is only the FALLBACK base when no tag is visible to
+// the build — keep it roughly in sync with the latest release tag; only ever
+// raise it, never lower it.
+//
+// CURRENT_PROJECT_VERSION (CFBundleVersion, the build number) is always set to
 // CI_BUILD_NUMBER by CI. The values below are used only for local/dev builds.
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0

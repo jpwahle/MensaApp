@@ -16,16 +16,25 @@
 # Such archives pass locally but fail App Store Connect processing silently:
 # nothing shows in the Xcode Cloud log; Apple emails the account holder instead.
 #
-# Fix: before xcodebuild reads the xcconfig, stamp BOTH values from
-# CI_BUILD_NUMBER (Xcode Cloud's monotonically increasing run number):
+# Fix: before xcodebuild reads the xcconfig, stamp both values. Two modes:
 #
-#   CURRENT_PROJECT_VERSION (CFBundleVersion)      -> <CI_BUILD_NUMBER>                  e.g. 12
-#   MARKETING_VERSION (CFBundleShortVersionString) -> <major.minor>.<CI_BUILD_NUMBER>    e.g. 1.0.12
+#   Release (tag) builds — CI_TAG is set (workflow started by a v* tag):
+#     MARKETING_VERSION           -> the tag itself (v1.1 -> 1.1)
+#     CURRENT_PROJECT_VERSION     -> CI_BUILD_NUMBER
+#   The tag IS the public App Store version. The GitHub workflow
+#   .github/workflows/release-app-store.yml waits for this exact version
+#   string, so the two must never diverge.
 #
-# The committed MARKETING_VERSION (e.g. "1.0") is the human-controlled
-# major.minor base: bump it for milestones (1.1, 2.0) and CI appends the build
-# number as the patch, so every push to main yields a fresh, always-accepted
-# version with no manual step. Runs after ci_post_clone, before the archive action.
+#   Branch (main) builds — no CI_TAG:
+#     MARKETING_VERSION           -> <major.minor>.<CI_BUILD_NUMBER>  e.g. 1.1.37
+#     CURRENT_PROJECT_VERSION     -> CI_BUILD_NUMBER
+#   The major.minor base is taken from the latest release tag reachable from
+#   HEAD so TestFlight builds always outrank the last shipped version, falling
+#   back to the committed MARKETING_VERSION base when no tag is visible.
+#   (Prefer two-component release tags like v1.2 — the branch scheme appends
+#   the build number as the third component.)
+#
+# Runs after ci_post_clone, before the archive action.
 
 set -euxo pipefail
 
@@ -39,11 +48,31 @@ CONFIG="$CI_PRIMARY_REPOSITORY_PATH/iosApp/Configuration/Config.xcconfig"
 # CFBundleVersion: the build number is CI_BUILD_NUMBER verbatim.
 sed -i '' "s/^CURRENT_PROJECT_VERSION=.*/CURRENT_PROJECT_VERSION=${CI_BUILD_NUMBER}/" "$CONFIG"
 
-# CFBundleShortVersionString: keep the committed major.minor as the base and
-# append the build number as the patch. Normalize to major.minor first, since
-# CFBundleShortVersionString accepts at most three integer components.
-MARKETING_BASE="$(grep '^MARKETING_VERSION=' "$CONFIG" | cut -d= -f2 | tr -d '[:space:]' | cut -d. -f1-2)"
-sed -i '' "s/^MARKETING_VERSION=.*/MARKETING_VERSION=${MARKETING_BASE}.${CI_BUILD_NUMBER}/" "$CONFIG"
+if [ -n "${CI_TAG:-}" ]; then
+  # Release build: the tag is the marketing version.
+  MARKETING="${CI_TAG#v}"
+  if ! printf '%s' "$MARKETING" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$'; then
+    echo "ERROR: tag '$CI_TAG' is not a release version tag (expected v<major>[.<minor>[.<patch>]], e.g. v1.1.0)."
+    exit 1
+  fi
+else
+  # Branch build: <major.minor>.<build>, based on the highest release tag
+  # reachable from HEAD so TestFlight uploads stay above the last approved
+  # version. Fetching tags is best-effort — Xcode Cloud clones do not always
+  # include them.
+  git -C "$CI_PRIMARY_REPOSITORY_PATH" fetch --tags --quiet 2>/dev/null || true
+  TAG_BASE="$( { git -C "$CI_PRIMARY_REPOSITORY_PATH" tag --list 'v[0-9]*' --merged HEAD --sort=-v:refname 2>/dev/null || true; } | head -n 1 | sed 's/^v//' | cut -d. -f1-2 )"
+  if printf '%s' "$TAG_BASE" | grep -Eq '^[0-9]+(\.[0-9]+)?$'; then
+    MARKETING_BASE="$TAG_BASE"
+  else
+    # Fallback: the committed base, normalized to major.minor since
+    # CFBundleShortVersionString accepts at most three integer components.
+    MARKETING_BASE="$(grep '^MARKETING_VERSION=' "$CONFIG" | cut -d= -f2 | tr -d '[:space:]' | cut -d. -f1-2)"
+  fi
+  MARKETING="${MARKETING_BASE}.${CI_BUILD_NUMBER}"
+fi
+
+sed -i '' "s/^MARKETING_VERSION=.*/MARKETING_VERSION=${MARKETING}/" "$CONFIG"
 
 echo "Stamped versions:"
 grep -E '^(CURRENT_PROJECT_VERSION|MARKETING_VERSION)=' "$CONFIG"

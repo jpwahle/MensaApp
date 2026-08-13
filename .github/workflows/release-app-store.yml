@@ -1,0 +1,111 @@
+# Submits a new iOS version to App Store review whenever a version tag
+# (v1.1, v1.2.0, ...) lands on a commit on main.
+#
+# Tags normally originate on the upstream repo (which ships Android) and are
+# mirrored into this fork by sync-upstream-tags.yml, which then dispatches
+# this workflow explicitly (tag pushes made with GITHUB_TOKEN cannot trigger
+# `on: push`). Tags pushed to this fork by hand trigger it directly.
+#
+# The binary itself is built by Xcode Cloud: its tag-triggered workflow stamps
+# MARKETING_VERSION with the tag (see iosApp/ci_scripts/ci_pre_xcodebuild.sh)
+# and uploads the archive. This workflow generates customer-facing release
+# notes (GitHub release body -> annotated tag message -> commits since the
+# previous tag; optionally polished into English + German by Claude), waits
+# for the processed build, creates the App Store version, and submits it for
+# review with automatic release after approval.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   ASC_ISSUER_ID       App Store Connect API issuer ID
+#   ASC_KEY_ID          App Store Connect API key ID
+#   ASC_PRIVATE_KEY     contents of the .p8 API key (App Manager role)
+#   ANTHROPIC_API_KEY   optional — AI-written, localized release notes
+#
+# See .github/RELEASING.md for the one-time setup (including the Xcode Cloud
+# tag workflow).
+name: Release to App Store
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to (re-)submit, e.g. v1.1.0'
+        required: true
+
+permissions:
+  contents: read
+
+# Queue runs instead of racing two releases against one App Store version.
+concurrency:
+  group: release-app-store
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    # iOS releases happen on this fork (Xcode Cloud and the ASC secrets live
+    # here) — keep upstream from running this if the file is ever merged there.
+    if: github.repository == 'jpwahle/MensaApp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+
+    steps:
+      - name: "✅ Checkout code"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # Full history + tags for release-notes generation (commit ranges,
+          # annotated tag messages) and the main-ancestry check.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: "🔢 Derive version"
+        id: version
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+(\.[0-9]+){0,2}$'; then
+            echo "::error::'$TAG' is not a release tag (expected v<major>[.<minor>[.<patch>]], e.g. v1.1.0)."
+            exit 1
+          fi
+          TAG_COMMIT="$(git rev-parse -q --verify "refs/tags/$TAG^{commit}")" || {
+            echo "::error::Tag '$TAG' does not exist in this repository."
+            exit 1
+          }
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+            echo "::error::Tag '$TAG' does not point to a commit on main. Releases are only built from main."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG (App Store version ${TAG#v})"
+
+      - name: "⚙️ Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "⚙️ Install dependencies"
+        run: pip install --quiet 'pyjwt[crypto]' requests anthropic
+
+      - name: "📝 Generate release notes"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Releases (and their human-written notes) are published on the
+          # upstream repo; the notes script checks it after this fork.
+          UPSTREAM_REPOSITORY: lkaesberg/MensaApp
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 scripts/release_notes.py \
+            --tag "${{ steps.version.outputs.tag }}" \
+            --output "$RUNNER_TEMP/notes.json"
+
+      - name: "🚀 Create App Store version and submit for review"
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          python3 scripts/appstore_release.py \
+            --version "${{ steps.version.outputs.version }}" \
+            --notes "$RUNNER_TEMP/notes.json"

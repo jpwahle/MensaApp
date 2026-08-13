@@ -1,0 +1,50 @@
+# Watches the upstream repository (which ships Android and creates the
+# release tags) and mirrors new release tags into this fork, which ships iOS.
+#
+# GitHub never propagates tags to forks — "Sync fork" only moves branches —
+# so this runs on a schedule. For each new upstream tag it merges the release
+# commit into main (this fork carries iOS-only commits upstream lacks), tags
+# the merged main, pushes, and dispatches the App Store release workflow.
+# Xcode Cloud picks the tag push up on its own via its GitHub App webhook.
+#
+# Run it manually (Actions → Sync release tags from upstream → Run workflow)
+# to pick a fresh upstream release up immediately instead of waiting for the
+# next scheduled tick.
+name: Sync release tags from upstream
+
+on:
+  schedule:
+    - cron: '17,47 * * * *' # twice an hour, offset from top-of-hour congestion
+  workflow_dispatch:
+
+permissions:
+  contents: write # push merged main + mirrored tags
+  actions: write  # dispatch the App Store release workflow
+
+concurrency:
+  group: sync-upstream-tags
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # This automation belongs to the iOS fork only — never run it upstream.
+    if: github.repository == 'jpwahle/MensaApp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: "✅ Checkout code"
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: "🔄 Mirror new upstream release tags"
+        env:
+          UPSTREAM_REPO: lkaesberg/MensaApp
+          # Upstream tags below this predate the iOS automation (old iOS
+          # builds already shipped as 1.0.<build>); never mirror them.
+          MIN_VERSION: '1.1.0'
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/sync_upstream_tags.sh
