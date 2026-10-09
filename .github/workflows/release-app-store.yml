@@ -46,12 +46,12 @@ jobs:
     # iOS releases happen on this fork (Xcode Cloud and the ASC secrets live
     # here) — keep upstream from running this if the file is ever merged there.
     if: github.repository == 'jpwahle/MensaApp'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 150
 
     steps:
       - name: "✅ Checkout code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           # Full history + tags for release-notes generation (commit ranges,
@@ -81,7 +81,7 @@ jobs:
           echo "Releasing $TAG (App Store version ${TAG#v})"
 
       - name: "⚙️ Set up Python"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
