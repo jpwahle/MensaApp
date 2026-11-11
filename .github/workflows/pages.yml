@@ -14,6 +14,9 @@ permissions:
 
 jobs:
   build-and-deploy:
+    # Pages (mensa.larskaesberg.de) is served from upstream only; this fork has
+    # no Pages site, so configure-pages fails with "Get Pages site failed".
+    if: github.repository == 'lkaesberg/MensaApp'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
