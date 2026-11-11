@@ -123,11 +123,13 @@ silently.
   — the run fails and asks you to resolve it in App Store Connect.
 - **Export compliance** is answered automatically (the app declares
   `ITSAppUsesNonExemptEncryption=false`).
-- **Version scheme**: prefer two-component tags (`v1.2`, `v2.0`); the branch
-  builds append the Xcode Cloud build number as the third component. When you
-  tag a new major/minor, also raise the fallback `MARKETING_VERSION` base in
-  `iosApp/Configuration/Config.xcconfig` at some point (it only matters if
-  Xcode Cloud ever clones without tags).
+- **Version scheme**: branch builds upload `<major.minor>.<build>` (Xcode
+  Cloud build number as the third component), always above the latest
+  release: the floor is the higher of the newest visible tag and
+  `MARKETING_VERSION` in `iosApp/Configuration/Config.xcconfig`. Xcode Cloud
+  often clones without tags, so the committed value is what actually counts —
+  `sync_upstream_tags.sh` raises it with every mirrored release. If you tag a
+  release on this fork by hand, raise it yourself in the same push.
 
 ---
 

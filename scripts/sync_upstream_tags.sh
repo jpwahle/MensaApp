@@ -12,12 +12,14 @@
 #
 #   1. merges the upstream release commit into the fork's main
 #      (a no-op when the fork already contains it),
-#   2. creates the same tag name on the fork's merged main — the iOS release
+#   2. raises MARKETING_VERSION in iosApp/Configuration/Config.xcconfig to
+#      the release (the version floor for Xcode Cloud branch builds),
+#   3. creates the same tag name on the fork's merged main — the iOS release
 #      is "the upstream release plus this fork's iOS layer",
-#   3. pushes main + tags, and
-#   4. dispatches the App Store release workflow for each new tag.
+#   4. pushes main + tags, and
+#   5. dispatches the App Store release workflow for each new tag.
 #
-# Step 4 is an explicit dispatch because pushes made with GITHUB_TOKEN never
+# Step 5 is an explicit dispatch because pushes made with GITHUB_TOKEN never
 # trigger `on: push` workflows (GitHub's Actions loop prevention). Xcode
 # Cloud's GitHub App webhook is NOT affected by that rule, so the tag push
 # alone is enough to start the build.
@@ -75,6 +77,17 @@ for tag in $(git for-each-ref --format='%(refname)' 'refs/upstream-tags/v[0-9]*'
       echo "::error::Merging upstream release $tag into main has conflicts. Sync the fork manually (Sync fork button or 'git pull upstream main'), push, then re-run this workflow."
       exit 1
     fi
+  fi
+
+  # Record the release as the committed version floor for Xcode Cloud branch
+  # builds (ci_pre_xcodebuild.sh), which often see no tags. Only ever raise it.
+  config="iosApp/Configuration/Config.xcconfig"
+  current="$(grep '^MARKETING_VERSION=' "$config" | cut -d= -f2 | tr -d '[:space:]')"
+  if version_lt "$current" "$version"; then
+    sed -i.bak "s/^MARKETING_VERSION=.*/MARKETING_VERSION=${version}/" "$config"
+    rm -f "$config.bak"
+    git add "$config"
+    git commit --quiet -m "chore(ios): raise MARKETING_VERSION floor to $version"
   fi
 
   # Preserve an annotated tag's message — it is a release-notes source.

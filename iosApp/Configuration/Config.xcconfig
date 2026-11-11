@@ -19,12 +19,12 @@ PRODUCT_BUNDLE_IDENTIFIER=com.lkaesberg.mensaapp.ComposeApp
 // submits that build for review automatically. See .github/RELEASING.md.
 //
 // Branch (main) builds: CI stamps <major.minor>.<CI_BUILD_NUMBER> (e.g. 1.1.37)
-// for TestFlight, where major.minor comes from the latest release tag. The
-// MARKETING_VERSION below is only the FALLBACK base when no tag is visible to
-// the build — keep it roughly in sync with the latest release tag; only ever
-// raise it, never lower it.
+// for TestFlight, and it always outranks the MARKETING_VERSION below. That value
+// is the latest release: scripts/sync_upstream_tags.sh raises it automatically
+// for every mirrored release tag, because Xcode Cloud often clones without
+// tags. If you tag a release by hand, raise it too; never lower it.
 //
 // CURRENT_PROJECT_VERSION (CFBundleVersion, the build number) is always set to
 // CI_BUILD_NUMBER by CI. The values below are used only for local/dev builds.
 CURRENT_PROJECT_VERSION=1
-MARKETING_VERSION=1.0
+MARKETING_VERSION=1.2.2
