@@ -30,7 +30,7 @@
 #     CURRENT_PROJECT_VERSION     -> CI_BUILD_NUMBER
 #   The major.minor base is the higher of the latest release tag reachable
 #   from HEAD and the committed MARKETING_VERSION (kept at the latest release
-#   by scripts/sync_upstream_tags.sh), so TestFlight builds always outrank the
+#   by scripts/raise_version_floor.sh on every release tag), so TestFlight builds always outrank the
 #   last shipped version even when the clone has no tags. If the build number
 #   does not exceed the release's patch number, the minor is bumped instead.
 #
@@ -58,8 +58,8 @@ if [ -n "${CI_TAG:-}" ]; then
 else
   # Branch build: <major.minor>.<build>, which must outrank the last release.
   # The floor is the HIGHER of (a) the newest release tag reachable from HEAD
-  # and (b) the committed MARKETING_VERSION, which sync_upstream_tags.sh raises
-  # to every mirrored release. (b) matters: Xcode Cloud clones often carry no
+  # and (b) the committed MARKETING_VERSION, which raise_version_floor.sh raises
+  # to every release tag. (b) matters: Xcode Cloud clones often carry no
   # tags and the fetch below can fail silently — that once stamped 1.0.18
   # while 1.2.2 was live (ITMS-90062).
   git -C "$CI_PRIMARY_REPOSITORY_PATH" fetch --tags --quiet 2>/dev/null || true

@@ -81,14 +81,7 @@ for tag in $(git for-each-ref --format='%(refname)' 'refs/upstream-tags/v[0-9]*'
 
   # Record the release as the committed version floor for Xcode Cloud branch
   # builds (ci_pre_xcodebuild.sh), which often see no tags. Only ever raise it.
-  config="iosApp/Configuration/Config.xcconfig"
-  current="$(grep '^MARKETING_VERSION=' "$config" | cut -d= -f2 | tr -d '[:space:]')"
-  if version_lt "$current" "$version"; then
-    sed -i.bak "s/^MARKETING_VERSION=.*/MARKETING_VERSION=${version}/" "$config"
-    rm -f "$config.bak"
-    git add "$config"
-    git commit --quiet -m "chore(ios): raise MARKETING_VERSION floor to $version"
-  fi
+  bash "$(dirname "$0")/raise_version_floor.sh" "$version" >/dev/null
 
   # Preserve an annotated tag's message — it is a release-notes source.
   if [ "$(git cat-file -t "refs/upstream-tags/$tag")" = "tag" ]; then

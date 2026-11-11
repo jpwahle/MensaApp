@@ -1,0 +1,80 @@
+# Keeps the committed MARKETING_VERSION (the version floor for Xcode Cloud
+# TestFlight builds of main) at the latest release when a release tag is
+# pushed to this fork by hand.
+#
+# Why: iosApp/ci_scripts/ci_pre_xcodebuild.sh versions main builds as
+# <major.minor>.<build> above max(latest visible tag, committed
+# MARKETING_VERSION). Xcode Cloud often clones without tags, so the committed
+# value is what counts — if it lags behind the live App Store version, the
+# upload is rejected (ITMS-90062, as happened with 1.0.18 vs 1.2.2).
+#
+# Mirrored upstream releases are already handled inside
+# scripts/sync_upstream_tags.sh (its tag pushes use GITHUB_TOKEN and never
+# trigger this workflow); this covers everything else. It is a no-op when the
+# floor is already at or above the tag.
+name: Raise iOS version floor
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to raise the floor to, e.g. v1.3.0'
+        required: true
+
+permissions:
+  contents: write # push the floor bump to main
+
+# Share the lock with the upstream sync, which also pushes main.
+concurrency:
+  group: sync-upstream-tags
+  cancel-in-progress: false
+
+jobs:
+  raise:
+    if: github.repository == 'jpwahle/MensaApp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "✅ Checkout main"
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: "🔢 Raise MARKETING_VERSION floor"
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+(\.[0-9]+){0,2}$'; then
+            echo "'$TAG' is not a release tag; nothing to do."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "refs/tags/$TAG^{commit}" HEAD; then
+            echo "::warning::Tag $TAG is not on main; the App Store release skips it too, so the floor stays as is."
+            exit 0
+          fi
+
+          for attempt in 1 2 3; do
+            result="$(bash scripts/raise_version_floor.sh "$TAG")"
+            if [ "$result" = "unchanged" ]; then
+              echo "MARKETING_VERSION is already at or above ${TAG#v}."
+              exit 0
+            fi
+            if git push --quiet origin HEAD:main; then
+              echo "Raised MARKETING_VERSION floor to ${TAG#v} on main."
+              exit 0
+            fi
+            echo "Push raced with another update to main; retrying ($attempt/3)…"
+            git fetch --quiet origin main
+            git reset --quiet --hard origin/main
+          done
+          echo "::error::Could not push the MARKETING_VERSION bump to main. Raise it by hand in iosApp/Configuration/Config.xcconfig."
+          exit 1

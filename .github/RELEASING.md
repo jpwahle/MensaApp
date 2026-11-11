@@ -128,8 +128,9 @@ silently.
   release: the floor is the higher of the newest visible tag and
   `MARKETING_VERSION` in `iosApp/Configuration/Config.xcconfig`. Xcode Cloud
   often clones without tags, so the committed value is what actually counts —
-  `sync_upstream_tags.sh` raises it with every mirrored release. If you tag a
-  release on this fork by hand, raise it yourself in the same push.
+  it is raised automatically for every release tag (`sync_upstream_tags.sh`
+  for mirrored ones, `raise-version-floor.yml` for tags pushed by hand), via
+  `scripts/raise_version_floor.sh`. Nothing to bump manually.
 
 ---
 
