@@ -28,4 +28,4 @@ PRODUCT_BUNDLE_IDENTIFIER=com.lkaesberg.mensaapp.ComposeApp
 // CURRENT_PROJECT_VERSION (CFBundleVersion, the build number) is always set to
 // CI_BUILD_NUMBER by CI. The values below are used only for local/dev builds.
 CURRENT_PROJECT_VERSION=1
-MARKETING_VERSION=1.2.2
+MARKETING_VERSION=1.2.3
