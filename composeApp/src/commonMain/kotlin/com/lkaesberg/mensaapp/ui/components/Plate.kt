@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.lkaesberg.mensaapp.AiImagery
 import com.lkaesberg.mensaapp.Meal
 import com.lkaesberg.mensaapp.SupabaseConfig
 import com.lkaesberg.mensaapp.data.MenuStructure
@@ -26,7 +27,8 @@ import io.kamel.image.asyncPainterResource
 
 /**
  * Async-loaded meal photo, square-cropped with rounded corners.
- * Falls back to a tinted placeholder while loading or on error.
+ * Falls back to a tinted placeholder while loading, on error, and on the
+ * China storefront where the AI-generated photos aren't shown (AiImagery).
  */
 @Composable
 fun Plate(
@@ -46,14 +48,19 @@ fun Plate(
             .background(palette.moss)
             .border(1.dp, Color.Black.copy(alpha = 0.04f), RoundedCornerShape(radius))
     ) {
-        KamelImage(
-            resource = asyncPainterResource(data = url),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-            onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-        )
+        // AI-generated photos stay off on the China storefront (AiImagery).
+        if (AiImagery.allowed) {
+            KamelImage(
+                resource = asyncPainterResource(data = url),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+                onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+            )
+        } else {
+            PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -73,14 +80,19 @@ fun PlateFill(
             .clip(RoundedCornerShape(radius))
             .background(palette.moss)
     ) {
-        KamelImage(
-            resource = asyncPainterResource(data = url),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-            onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-        )
+        // AI-generated photos stay off on the China storefront (AiImagery).
+        if (AiImagery.allowed) {
+            KamelImage(
+                resource = asyncPainterResource(data = url),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+                onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+            )
+        } else {
+            PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -103,14 +115,19 @@ fun SidePhoto(
             .clip(RoundedCornerShape(radius))
             .background(palette.moss)
     ) {
-        KamelImage(
-            resource = asyncPainterResource(data = url),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-            onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
-        )
+        // AI-generated photos stay off on the China storefront (AiImagery).
+        if (AiImagery.allowed) {
+            KamelImage(
+                resource = asyncPainterResource(data = url),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onLoading = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+                onFailure = { PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize()) },
+            )
+        } else {
+            PlatePlaceholder(palette.moss, palette.forest, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
